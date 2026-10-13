@@ -109,7 +109,7 @@ object Romaji {
         segments.forEachIndexed { index, segment ->
             val previous = segments.getOrNull(index - 1)
             val glue = index == 0 ||
-                segment.pos in GLUED ||
+                (segment.pos in GLUED && !isStandaloneCopula(segment, previous)) ||
                 previous?.pos == PartOfSpeech.PREFIX ||
                 (segment.pos == PartOfSpeech.PARTICLE && segment.surface in TE_FORM &&
                     previous?.pos in VERBAL)
@@ -118,6 +118,13 @@ object Romaji {
         }
         return fromKana(kana.toString())
     }
+
+    /**
+     * The copula (です, だ…) is written as its own word after nouns and adjectives
+     * (天気です → tenki desu), but past-tense だ after a verb stays glued (読んだ → yonda).
+     */
+    private fun isStandaloneCopula(segment: Segment, previous: Segment?) =
+        segment.surface in COPULA && previous?.pos != PartOfSpeech.VERB && previous?.pos != PartOfSpeech.AUXILIARY
 
     private fun spoken(segment: Segment): String {
         if (segment.pos == PartOfSpeech.PARTICLE) {
@@ -136,6 +143,7 @@ object Romaji {
         return mono[s[index]]
     }
 
+    private val COPULA = setOf("です", "でした", "でしょう", "だ", "だった", "だろう", "じゃ", "じゃない")
     private val GLUED = setOf(PartOfSpeech.AUXILIARY, PartOfSpeech.SUFFIX, PartOfSpeech.PUNCTUATION)
     private val VERBAL = setOf(PartOfSpeech.VERB, PartOfSpeech.AUXILIARY, PartOfSpeech.ADJECTIVE)
     private val TE_FORM = setOf("て", "で")

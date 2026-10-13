@@ -218,13 +218,14 @@ Each phase ends with something **testable on the phone**.
 - Status dot
 - ✅ Test: double tap a bubble → instant translation
 
-### Phase 6: Reader options + polish ✅ (code ready, testing on device)
+### Phase 6: Reader options + polish ✅
 - Reader options: furigana on/off, furigana size, status on/off, capture interval
 - Optional AccessibilityService to forward drags (option B improvement)
 - Battery tuning (pause when the screen is still, lower resolution)
 - ✅ Test: long reading session without hiccups
 
-### Phase 7: Quality upgrade (on-device ML)
+### Phase 7: Quality upgrade (on-device ML) — postponed
+ML Kit OCR is good enough for now (decided 2026-10-14); revisit if stylized text becomes a problem.
 - Bubble detector (ONNX) + manga-ocr (quantized ONNX), downloaded on first run
 - ML Kit kept as fallback
 - ✅ Test: compare accuracy before/after on the same pages

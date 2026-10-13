@@ -66,6 +66,8 @@ class AddItemViewModel(
     private val input = MutableStateFlow(initialText)
     private var typeEdited = false
     private var meaningsEdited = false
+    /** The translation came from the Translate button, so it belongs to the current text only. */
+    private var translationAutoFilled = false
 
     init {
         viewModelScope.launch {
@@ -78,7 +80,10 @@ class AddItemViewModel(
     }
 
     fun setInput(text: String) {
-        state.update { it.copy(input = text) }
+        // A translation filled in for the old text would now be wrong; one typed by hand stays.
+        val clear = translationAutoFilled && text != state.value.input
+        if (clear) translationAutoFilled = false
+        state.update { it.copy(input = text, translation = if (clear) "" else it.translation) }
         input.value = text
     }
 
@@ -118,7 +123,10 @@ class AddItemViewModel(
         state.update { it.copy(meanings = text) }
     }
 
-    fun setTranslation(text: String) = state.update { it.copy(translation = text) }
+    fun setTranslation(text: String) {
+        translationAutoFilled = false
+        state.update { it.copy(translation = text) }
+    }
 
     /** Fills the translation with DeepL (cached, so the same sentence is never paid for twice). */
     /** DeepL when it works; otherwise the on-device translator, quietly. */
@@ -134,6 +142,7 @@ class AddItemViewModel(
                 }
                 deepL ?: runCatching { container.offlineTranslator.translate(text) }.getOrNull()
             }
+            if (english != null) translationAutoFilled = true
             state.update {
                 it.copy(
                     translating = false,

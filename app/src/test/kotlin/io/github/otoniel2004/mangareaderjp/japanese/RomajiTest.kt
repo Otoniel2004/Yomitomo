@@ -54,6 +54,19 @@ class RomajiTest {
     }
 
     @Test
+    fun `copula is its own word after nouns but past da stays glued to verbs`() {
+        val weather = listOf(
+            Segment("今日", "きょう", NOUN), Segment("は", null, PARTICLE),
+            Segment("天気", "てんき", NOUN), Segment("です", null, AUXILIARY),
+            Segment("ね", null, PARTICLE),
+        )
+        assertEquals("kyou wa tenki desu ne", Romaji.fromSegments(weather))
+
+        val read = listOf(Segment("読ん", "よん", VERB), Segment("だ", null, AUXILIARY))
+        assertEquals("yonda", Romaji.fromSegments(read))
+    }
+
+    @Test
     fun `particle wa and glued auxiliary`() {
         val sentence = listOf(
             Segment("俺", "おれ", PRONOUN), Segment("は", null, PARTICLE),
