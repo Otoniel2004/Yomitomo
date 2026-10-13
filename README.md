@@ -17,6 +17,8 @@ with spaced repetition, Anki-style.
 | 3 | Japanese OCR (ML Kit, on-device) | ✅ |
 | 4 | On-page furigana + 1 tap (word) / 2 taps (sentence) | ✅ |
 | 5 | Bubble translation (DeepL), cached, with previous-page context | ✅ |
+| 6 | Swipe-through on bubbles, adaptive capture rate, furigana size, battery saver | ✅ |
+| 7 | manga-ocr + bubble detector (on-device) | ⏳ |
 | + | Manual cards: type romaji/Japanese or scan a photo, with kanji suggestions | ✅ |
 
 ## Building

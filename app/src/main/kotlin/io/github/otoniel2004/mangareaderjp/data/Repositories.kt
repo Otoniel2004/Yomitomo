@@ -5,6 +5,7 @@ import java.io.File
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import io.github.otoniel2004.mangareaderjp.srs.Rating
 import io.github.otoniel2004.mangareaderjp.srs.Srs
@@ -42,6 +43,9 @@ class SavedItemRepository(private val dao: SavedItemDao, private val context: Co
     fun imagesDir(): File = File(context.filesDir, "card-images").apply { mkdirs() }
 }
 
+/** Size of the furigana drawn on the page, relative to the characters. */
+enum class FuriganaSize(val ratio: Double) { SMALL(0.36), MEDIUM(0.45), LARGE(0.56) }
+
 /** Reader preferences (what is drawn on top of the manga). */
 data class ReaderSettings(
     val showFuriganaOnPage: Boolean = true,
@@ -50,6 +54,9 @@ data class ReaderSettings(
     val showOcrBoxes: Boolean = false,
     /** Translate every new page right away (instant popups, uses DeepL quota) or only on request. */
     val autoTranslate: Boolean = true,
+    val furiganaSize: FuriganaSize = FuriganaSize.MEDIUM,
+    /** Checks the screen less often: slower to notice a new page, lighter on the battery. */
+    val batterySaver: Boolean = false,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -65,6 +72,8 @@ class SettingsRepository(private val context: Context) {
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
         val OCR_BOXES = booleanPreferencesKey("ocr_boxes")
         val AUTO_TRANSLATE = booleanPreferencesKey("auto_translate")
+        val FURIGANA_SIZE = stringPreferencesKey("furigana_size")
+        val BATTERY_SAVER = booleanPreferencesKey("battery_saver")
         val SEEDED = booleanPreferencesKey("seeded_samples")
     }
 
@@ -75,6 +84,8 @@ class SettingsRepository(private val context: Context) {
             keepScreenOn = prefs[Keys.KEEP_SCREEN_ON] ?: true,
             showOcrBoxes = prefs[Keys.OCR_BOXES] ?: false,
             autoTranslate = prefs[Keys.AUTO_TRANSLATE] ?: true,
+            furiganaSize = prefs[Keys.FURIGANA_SIZE]?.let { runCatching { FuriganaSize.valueOf(it) }.getOrNull() } ?: FuriganaSize.MEDIUM,
+            batterySaver = prefs[Keys.BATTERY_SAVER] ?: false,
         )
     }
 
@@ -83,6 +94,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setKeepScreenOn(value: Boolean) = set(Keys.KEEP_SCREEN_ON, value)
     suspend fun setShowOcrBoxes(value: Boolean) = set(Keys.OCR_BOXES, value)
     suspend fun setAutoTranslate(value: Boolean) = set(Keys.AUTO_TRANSLATE, value)
+    suspend fun setBatterySaver(value: Boolean) = set(Keys.BATTERY_SAVER, value)
+    suspend fun setFuriganaSize(value: FuriganaSize) {
+        context.dataStore.edit { it[Keys.FURIGANA_SIZE] = value.name }
+    }
 
     suspend fun isSeeded(): Boolean = context.dataStore.data.first()[Keys.SEEDED] ?: false
     suspend fun markSeeded() = set(Keys.SEEDED, true)

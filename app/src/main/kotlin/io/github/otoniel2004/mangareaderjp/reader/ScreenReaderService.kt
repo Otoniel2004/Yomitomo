@@ -39,6 +39,7 @@ import io.github.otoniel2004.mangareaderjp.reader.ocr.OcrDebug
 import io.github.otoniel2004.mangareaderjp.data.ItemType
 import io.github.otoniel2004.mangareaderjp.data.SavedItem
 import io.github.otoniel2004.mangareaderjp.reader.ocr.Box
+import io.github.otoniel2004.mangareaderjp.reader.overlay.Drag
 import io.github.otoniel2004.mangareaderjp.reader.overlay.PageOverlay
 import io.github.otoniel2004.mangareaderjp.reader.overlay.PopupOverlay
 import io.github.otoniel2004.mangareaderjp.reader.overlay.ReaderPopup
@@ -97,6 +98,9 @@ class ScreenReaderService : Service() {
         private const val RESUME_NOTIFICATION_ID = 2
         private const val MAX_CAPTURE_WIDTH = 1080 // OCR needs real resolution
         private const val POLL_MILLIS = 250L
+        private const val MAX_POLL_MILLIS = 1_000L
+        private const val IDLE_AFTER_MILLIS = 10_000L
+        private const val PASS_THROUGH_DELAY = 50L
         private const val MASK_MARGIN = 8
         private const val TOUCH_MARGIN = 8
         private const val CROP_MARGIN = 16
@@ -154,6 +158,8 @@ class ScreenReaderService : Service() {
     private var lastSignature: IntArray? = null
     private var ignoredCells: BooleanArray? = null // where our drawings are, hidden from the detector
     private var paused = false                    // a popup is open: our own window is on screen
+    private var appWasOpen = false
+    private var lastMotionAt = 0L
     private var generation = 0
     private var pages = 0
     private var captureWidth = 0
@@ -245,6 +251,17 @@ class ScreenReaderService : Service() {
         handler.post(poll)
     }
 
+    /**
+     * How long until the next look at the screen. Reading pages means bursts of activity and
+     * long still periods: after [IDLE_AFTER_MILLIS] without motion it checks 4× less often
+     * (max 1 s), and the battery saver doubles the base interval.
+     */
+    private fun pollDelay(): Long {
+        val base = if (settings.batterySaver) POLL_MILLIS * 2 else POLL_MILLIS
+        val idle = SystemClock.uptimeMillis() - lastMotionAt > IDLE_AFTER_MILLIS
+        return if (idle) (base * 4).coerceAtMost(MAX_POLL_MILLIS) else base
+    }
+
     /** Runs on the worker thread every POLL_MILLIS. */
     private val poll = object : Runnable {
         override fun run() {
@@ -255,16 +272,28 @@ class ScreenReaderService : Service() {
                 heldImage = image
                 lastSignature = FrameSampler.signature(image)
             }
-            if (!paused) {
+            // Our own app on screen: pause, and drop the drawings (they belong to the manga page).
+            val appOpen = ReaderStatus.appInForeground
+            if (appOpen != appWasOpen) {
+                appWasOpen = appOpen
+                if (appOpen) {
+                    generation++
+                    clearDrawings()
+                } else {
+                    detector.forgetPrevious() // back in the manga: settle and restore (SAME_PAGE)
+                }
+            }
+            if (!paused && !appOpen) {
                 lastSignature?.let { onEvent(detector.onFrame(it, SystemClock.uptimeMillis(), ignoredCells), it) }
             }
-            worker?.postDelayed(this, POLL_MILLIS)
+            worker?.postDelayed(this, pollDelay())
         }
     }
 
     private fun onEvent(event: PageChangeDetector.Event, signature: IntArray) {
         when (event) {
             PageChangeDetector.Event.MOVING -> {
+                lastMotionAt = SystemClock.uptimeMillis()
                 generation++
                 clearDrawings()
                 statusOverlay?.setState(StatusOverlay.State.Working)
@@ -305,7 +334,7 @@ class ScreenReaderService : Service() {
             val blocks = try {
                 val raw = engine.recognize(bitmap)
                 val cleaned = OcrFilter.clean(raw).also { OcrDebug.record(this, "screen", bitmap, raw, it) }
-                pageAnalyzer.analyze(cleaned)
+                pageAnalyzer.analyze(cleaned, settings.furiganaSize.ratio)
             } catch (e: Exception) {
                 Log.w(TAG, "OCR failed", e)
                 emptyList()
@@ -365,6 +394,18 @@ class ScreenReaderService : Service() {
                     onClose = close,
                 )
             }
+        }
+
+        /** A swipe that started on a bubble: replay it on the app below (if the service is on). */
+        override fun onDrag(drag: Drag) {
+            val forwarder = GestureForwarderService.instance ?: return
+            val targets = touchTargets ?: return
+            targets.setPassThrough(true)
+            // Give the window manager a frame to apply pass-through before the swipe is injected.
+            main.postDelayed({
+                val started = forwarder.replay(drag) { targets.setPassThrough(false) }
+                if (!started) targets.setPassThrough(false)
+            }, PASS_THROUGH_DELAY)
         }
 
         override fun onDoubleTap(block: Int, screenX: Int, screenY: Int) {

@@ -210,7 +210,7 @@ Each phase ends with something **testable on the phone**.
 - Touch areas over bubbles; 1 tap → word popup (with romaji) + [Save]
 - ✅ Test: tap a word, see its meaning, save it and find it on Home
 
-### Phase 5: Bubble translation (DeepL) + 2 taps ✅ (code ready, testing on device)
+### Phase 5: Bubble translation (DeepL) + 2 taps ✅
 - Settings screen with the DeepL key (stored encrypted on the device)
 - Batched whole-page translation + previous-page context
 - Page cache (hash) in Room
@@ -218,7 +218,7 @@ Each phase ends with something **testable on the phone**.
 - Status dot
 - ✅ Test: double tap a bubble → instant translation
 
-### Phase 6: Reader options + polish
+### Phase 6: Reader options + polish ✅ (code ready, testing on device)
 - Reader options: furigana on/off, furigana size, status on/off, capture interval
 - Optional AccessibilityService to forward drags (option B improvement)
 - Battery tuning (pause when the screen is still, lower resolution)

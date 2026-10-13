@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Manga Reader JP</string>
+    <string name="gesture_forwarder_label">Manga Reader JP – page swipes</string>
+    <string name="gesture_forwarder_description">Lets a swipe that starts on a text bubble still turn the page in your manga app. It only replays your own swipe; it does not read anything on the screen.</string>
 </resources>

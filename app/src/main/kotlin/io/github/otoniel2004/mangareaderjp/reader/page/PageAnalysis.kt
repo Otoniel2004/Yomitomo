@@ -78,9 +78,11 @@ class AnalyzedBlock(
  */
 class PageAnalyzer(private val analyzer: JapaneseAnalyzer, private val dictionary: Dictionary) {
 
-    fun analyze(blocks: List<OcrBlock>): List<AnalyzedBlock> = blocks.map(::analyzeBlock)
+    /** [rubyRatio]: furigana size relative to the characters (the "Furigana size" setting). */
+    fun analyze(blocks: List<OcrBlock>, rubyRatio: Double = DEFAULT_RUBY_RATIO): List<AnalyzedBlock> =
+        blocks.map { analyzeBlock(it, rubyRatio) }
 
-    private fun analyzeBlock(block: OcrBlock): AnalyzedBlock {
+    private fun analyzeBlock(block: OcrBlock, rubyRatio: Double): AnalyzedBlock {
         val morphemes = analyzer.analyze(block.text)
         val segments = morphemes.map { it.segment }
         val words = groupWords(morphemes)
@@ -114,7 +116,7 @@ class PageAnalyzer(private val analyzer: JapaneseAnalyzer, private val dictionar
                     val partChars = (unit until unit + part.text.length).map { unitToChar[it] }.distinct()
                     unit += part.text.length
                     val ruby = part.ruby ?: continue
-                    rubyMark(ruby, partChars.map { chars[it] })?.let(::add)
+                    rubyMark(ruby, partChars.map { chars[it] }, rubyRatio)?.let(::add)
                 }
             }
         }
@@ -177,27 +179,27 @@ class PageAnalyzer(private val analyzer: JapaneseAnalyzer, private val dictionar
 
 /**
  * Where a reading goes: above horizontal text, to the right of vertical text (as in printed
- * Japanese). Size ≈ 45% of the characters. Uses the characters of the first line the word
+ * Japanese). Size = [ratio] of the characters (45% by default). Uses the characters of the first line the word
  * touches when it wraps.
  */
-internal fun rubyMark(text: String, chars: List<PlacedChar>): RubyMark? {
+internal fun rubyMark(text: String, chars: List<PlacedChar>, ratio: Double = DEFAULT_RUBY_RATIO): RubyMark? {
     if (chars.isEmpty() || text.isEmpty()) return null
     val line = chars.first().line
     val area = chars.filter { it.line == line }.map { it.box }.reduce(Box::union)
     val vertical = chars.first().vertical
     val gap = 1
     return if (vertical) {
-        val size = max(MIN_RUBY_SIZE, (area.width * RUBY_RATIO).roundToInt())
+        val size = max(MIN_RUBY_SIZE, (area.width * ratio).roundToInt())
         val length = size * text.length
         val top = (area.top + area.bottom) / 2 - length / 2
         RubyMark(text, Box(area.right + gap, top, area.right + gap + size, top + length), vertical = true)
     } else {
-        val size = max(MIN_RUBY_SIZE, (area.height * RUBY_RATIO).roundToInt())
+        val size = max(MIN_RUBY_SIZE, (area.height * ratio).roundToInt())
         val length = size * text.length
         val left = (area.left + area.right) / 2 - length / 2
         RubyMark(text, Box(left, area.top - gap - size, left + length, area.top - gap), vertical = false)
     }
 }
 
-private const val RUBY_RATIO = 0.45
+const val DEFAULT_RUBY_RATIO = 0.45
 private const val MIN_RUBY_SIZE = 9

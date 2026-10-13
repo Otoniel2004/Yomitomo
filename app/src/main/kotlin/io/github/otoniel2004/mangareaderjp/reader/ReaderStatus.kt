@@ -23,4 +23,10 @@ object ReaderStatus {
     val state: StateFlow<State> = mutableState.asStateFlow()
 
     internal fun update(transform: (State) -> State) = mutableState.update(transform)
+
+    /**
+     * True while Manga Reader JP itself is on screen. The reader pauses then: otherwise it
+     * would read our own Japanese cards and cover them with touch targets.
+     */
+    @Volatile var appInForeground = false
 }

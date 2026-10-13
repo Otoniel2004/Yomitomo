@@ -39,7 +39,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import io.github.otoniel2004.mangareaderjp.AppContainer
 import io.github.otoniel2004.mangareaderjp.R
+import io.github.otoniel2004.mangareaderjp.data.FuriganaSize
 import io.github.otoniel2004.mangareaderjp.data.ReaderSettings
+import io.github.otoniel2004.mangareaderjp.reader.GestureForwarderService
+import android.content.Intent
+import android.provider.Settings
+import androidx.compose.material3.FilterChip
+import androidx.compose.ui.platform.LocalContext
 import io.github.otoniel2004.mangareaderjp.data.SecretStore
 import io.github.otoniel2004.mangareaderjp.translation.DeepLClient
 import io.github.otoniel2004.mangareaderjp.translation.TranslationException
@@ -81,6 +87,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setKeepScreenOn(value: Boolean) = launch { settings.setKeepScreenOn(value) }
     fun setShowOcrBoxes(value: Boolean) = launch { settings.setShowOcrBoxes(value) }
     fun setAutoTranslate(value: Boolean) = launch { settings.setAutoTranslate(value) }
+    fun setFuriganaSize(value: FuriganaSize) = launch { settings.setFuriganaSize(value) }
+    fun setBatterySaver(value: Boolean) = launch { settings.setBatterySaver(value) }
 
     /** Checks the key with DeepL first; only a key DeepL accepts is stored. */
     fun saveKey(key: String) {
@@ -138,6 +146,8 @@ fun ReaderOptionsScreen(onBack: () -> Unit) {
     val viewModel = appViewModel { SettingsViewModel(it) }
     val state by viewModel.reader.collectAsStateWithLifecycle()
     val deepL by viewModel.deepL.collectAsStateWithLifecycle()
+    val swipesEnabled by GestureForwarderService.isConnected.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -174,6 +184,19 @@ fun ReaderOptionsScreen(onBack: () -> Unit) {
                 description = "Shows the hiragana reading over kanji and katakana while you read.",
                 checked = state.showFuriganaOnPage,
                 onChange = viewModel::setShowFuriganaOnPage,
+            )
+            HorizontalDivider()
+            FuriganaSizeRow(state.furiganaSize, viewModel::setFuriganaSize)
+            HorizontalDivider()
+            SwipeRow(swipesEnabled) {
+                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            HorizontalDivider()
+            OptionRow(
+                title = "Battery saver",
+                description = "Checks the screen half as often. A new page takes a moment longer to be read.",
+                checked = state.batterySaver,
+                onChange = viewModel::setBatterySaver,
             )
             HorizontalDivider()
             OptionRow(
@@ -250,6 +273,38 @@ private fun DeepLSection(state: DeepLUiState, viewModel: SettingsViewModel) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun FuriganaSizeRow(selected: FuriganaSize, onSelect: (FuriganaSize) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Furigana size", style = MaterialTheme.typography.titleMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FuriganaSize.entries.forEach { size ->
+                FilterChip(
+                    selected = size == selected,
+                    onClick = { onSelect(size) },
+                    label = { Text(size.name.lowercase().replaceFirstChar(Char::uppercase)) },
+                )
+            }
+        }
+    }
+}
+
+/** Swipes that start on a bubble need the optional accessibility service; only the user can turn it on. */
+@Composable
+private fun SwipeRow(enabled: Boolean, onOpenSettings: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Swipe on text turns the page", style = MaterialTheme.typography.titleMedium)
+        Text(
+            if (enabled) "On. A swipe that starts on a text bubble is passed to your manga app."
+            else "Off. Swipes that start on a text bubble don't turn the page. To fix it, open " +
+                "Accessibility → Installed apps → \"Manga Reader JP – page swipes\" and turn it on. " +
+                "It only replays your swipe; it can't read the screen.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (!enabled) OutlinedButton(onClick = onOpenSettings) { Text("Open Accessibility settings") }
     }
 }
 

@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import io.github.otoniel2004.mangareaderjp.reader.ReaderStatus
 import io.github.otoniel2004.mangareaderjp.ui.add.AddItemScreen
 import io.github.otoniel2004.mangareaderjp.ui.detail.ItemDetailScreen
 import io.github.otoniel2004.mangareaderjp.ui.home.HomeScreen
@@ -28,6 +29,16 @@ class MainActivity : ComponentActivity() {
                 AppNavHost()
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ReaderStatus.appInForeground = true
+    }
+
+    override fun onPause() {
+        ReaderStatus.appInForeground = false
+        super.onPause()
     }
 }
 

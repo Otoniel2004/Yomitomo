@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Gesture-only accessibility service: it may perform swipes (canPerformGestures) but cannot
+  read screen content (canRetrieveWindowContent=false), and only receives events from this app.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeAnnouncement"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/gesture_forwarder_description"
+    android:notificationTimeout="1000"
+    android:packageNames="io.github.otoniel2004.mangareaderjp" />

@@ -38,6 +38,20 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Optional: replays swipes that start on a text bubble (see GestureForwarderService). -->
+        <service
+            android:name=".reader.GestureForwarderService"
+            android:exported="true"
+            android:label="@string/gesture_forwarder_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/gesture_forwarder" />
+        </service>
+
         <!-- Lets the phone camera app save a photo into our cache (no camera permission needed). -->
         <provider
             android:name="androidx.core.content.FileProvider"
