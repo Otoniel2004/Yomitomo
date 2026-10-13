@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -161,9 +162,12 @@ fun AddItemScreen(
                         value = state.translation,
                         onValueChange = viewModel::setTranslation,
                         label = { Text("Translation (English)") },
-                        supportingText = { Text("Automatic translation arrives with DeepL in Phase 5.") },
+                        supportingText = state.translationError?.let { error -> { Text(error, color = MaterialTheme.colorScheme.error) } },
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    OutlinedButton(onClick = viewModel::translate, enabled = !state.translating) {
+                        Text(if (state.translating) "Translating…" else "Translate with DeepL")
+                    }
                 } else {
                     OutlinedTextField(
                         value = state.meanings,

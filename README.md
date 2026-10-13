@@ -16,7 +16,7 @@ with spaced repetition, Anki-style.
 | 2 | Background screen capture (page change detection) | ✅ |
 | 3 | Japanese OCR (ML Kit, on-device) | ✅ |
 | 4 | On-page furigana + 1 tap (word) / 2 taps (sentence) | ✅ |
-| 5 | Bubble translation (DeepL) | ⏳ |
+| 5 | Bubble translation (DeepL), cached, with previous-page context | ✅ |
 | + | Manual cards: type romaji/Japanese or scan a photo, with kanji suggestions | ✅ |
 
 ## Building

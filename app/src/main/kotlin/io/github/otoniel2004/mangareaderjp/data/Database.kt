@@ -3,7 +3,12 @@ package io.github.otoniel2004.mangareaderjp.data
 import android.content.Context
 import androidx.room.Dao
 import androidx.room.Database
+import androidx.room.Entity
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -66,13 +71,44 @@ class Converters {
     fun stringsFromJson(value: String): List<String> = json.decodeFromString(strings, value)
 }
 
-@Database(entities = [SavedItem::class], version = 1, exportSchema = false)
+/** A DeepL translation already paid for. */
+@Entity(tableName = "translation_cache")
+data class TranslationCacheEntry(
+    @PrimaryKey val source: String,
+    val translation: String,
+    val createdAt: Long,
+)
+
+@Dao
+interface TranslationCacheDao {
+    @Query("SELECT * FROM translation_cache WHERE source IN (:sources)")
+    suspend fun get(sources: List<String>): List<TranslationCacheEntry>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(entries: List<TranslationCacheEntry>)
+}
+
+/** Version 2 adds the translation cache; saved cards are untouched. */
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `translation_cache` (" +
+                "`source` TEXT NOT NULL, `translation` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`source`))",
+        )
+    }
+}
+
+@Database(entities = [SavedItem::class, TranslationCacheEntry::class], version = 2, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun savedItemDao(): SavedItemDao
+    abstract fun translationCacheDao(): TranslationCacheDao
 
     companion object {
         fun build(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "manga-reader.db").build()
+            Room.databaseBuilder(context, AppDatabase::class.java, "manga-reader.db")
+                .addMigrations(MIGRATION_1_2)
+                .build()
     }
 }

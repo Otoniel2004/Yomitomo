@@ -203,14 +203,14 @@ Each phase ends with something **testable on the phone**.
 - Scan with the camera or pick an image → OCR → tap the text blocks → same card editor, with a crop
 - Bundled JMdict (SQLite, built by `:tools:dictbuilder`) and Kuromoji tokenizer — shared with Phase 4
 
-### Phase 4: Furigana + dictionary + 1 tap ✅ (code ready, testing on device)
+### Phase 4: Furigana + dictionary + 1 tap ✅
 - Kuromoji (tokenization + readings) + reading overrides
 - Bundled JMdict (SQLite) + deinflection
 - Furigana drawn over kanji/katakana
 - Touch areas over bubbles; 1 tap → word popup (with romaji) + [Save]
 - ✅ Test: tap a word, see its meaning, save it and find it on Home
 
-### Phase 5: Bubble translation (DeepL) + 2 taps
+### Phase 5: Bubble translation (DeepL) + 2 taps ✅ (code ready, testing on device)
 - Settings screen with the DeepL key (stored encrypted on the device)
 - Batched whole-page translation + previous-page context
 - Page cache (hash) in Room

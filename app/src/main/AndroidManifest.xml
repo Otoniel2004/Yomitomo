@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- "Display over other apps": status dot now, furigana and popups later. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Sentence translation with DeepL. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".MangaReaderApp"

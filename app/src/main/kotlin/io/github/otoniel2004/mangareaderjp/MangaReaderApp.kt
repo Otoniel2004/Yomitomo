@@ -6,7 +6,11 @@ import io.github.otoniel2004.mangareaderjp.cards.CardDraftBuilder
 import io.github.otoniel2004.mangareaderjp.data.AppDatabase
 import io.github.otoniel2004.mangareaderjp.data.SampleData
 import io.github.otoniel2004.mangareaderjp.data.SavedItemRepository
+import io.github.otoniel2004.mangareaderjp.data.SecretStore
 import io.github.otoniel2004.mangareaderjp.data.SettingsRepository
+import io.github.otoniel2004.mangareaderjp.translation.DeepLClient
+import io.github.otoniel2004.mangareaderjp.translation.RoomTranslationCache
+import io.github.otoniel2004.mangareaderjp.translation.TranslationRepository
 import io.github.otoniel2004.mangareaderjp.dictionary.JmDictionary
 import io.github.otoniel2004.mangareaderjp.japanese.JapaneseAnalyzer
 import io.github.otoniel2004.mangareaderjp.japanese.KanaKanjiConverter
@@ -39,6 +43,14 @@ class AppContainer(context: Context) {
     val database = AppDatabase.build(context)
     val items = SavedItemRepository(database.savedItemDao(), context)
     val settings = SettingsRepository(context)
+
+    val secrets = SecretStore(context)
+    val deepL = DeepLClient { secrets.get(SecretStore.DEEPL_API_KEY) }
+    val translations = TranslationRepository(
+        cache = RoomTranslationCache(database.translationCacheDao()),
+        translateRemote = deepL::translate,
+        hasKey = { secrets.get(SecretStore.DEEPL_API_KEY) != null },
+    )
 
     val dictionary = JmDictionary(context)
     val analyzer = JapaneseAnalyzer()

@@ -10,15 +10,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +43,9 @@ import io.github.otoniel2004.mangareaderjp.ui.components.PartOfSpeechLegend
 import io.github.otoniel2004.mangareaderjp.ui.components.RomajiLine
 import io.github.otoniel2004.mangareaderjp.ui.components.label
 import io.github.otoniel2004.mangareaderjp.ui.home.label
+import io.github.otoniel2004.mangareaderjp.translation.TranslationState
 import io.github.otoniel2004.mangareaderjp.ui.theme.MangaReaderTheme
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * The popup over the manga. Two views of the same bubble, switchable with a button:
@@ -52,11 +60,17 @@ import io.github.otoniel2004.mangareaderjp.ui.theme.MangaReaderTheme
 fun ReaderPopup(
     word: PageWord?,
     sentence: List<Segment>,
+    sourceText: String,
+    translations: StateFlow<Map<String, TranslationState>>,
     atTop: Boolean,
     onSaveWord: (PageWord) -> Unit,
     onSaveSentence: () -> Unit,
+    onNeedTranslation: () -> Unit,
     onClose: () -> Unit,
 ) {
+    val translationMap by translations.collectAsState()
+    val translation = translationMap[sourceText]
+
     var showSentence by remember { mutableStateOf(word == null) }
     var wordSaved by remember { mutableStateOf(false) }
     var sentenceSaved by remember { mutableStateOf(false) }
@@ -65,6 +79,8 @@ fun ReaderPopup(
         if (word == null || showSentence) {
             SentenceView(
                 segments = sentence,
+                translation = translation,
+                onNeedTranslation = onNeedTranslation,
                 saved = sentenceSaved,
                 onSave = { sentenceSaved = true; onSaveSentence() },
                 onBack = if (word != null) ({ showSentence = false }) else null,
@@ -144,6 +160,8 @@ private fun WordView(word: PageWord, saved: Boolean, onSave: () -> Unit, onShowS
 @Composable
 private fun SentenceView(
     segments: List<Segment>,
+    translation: TranslationState?,
+    onNeedTranslation: () -> Unit,
     saved: Boolean,
     onSave: () -> Unit,
     onBack: (() -> Unit)?,
@@ -153,10 +171,18 @@ private fun SentenceView(
     FuriganaText(segments, showFurigana = true, fontSize = 24.sp, colorByPart = true)
     PartOfSpeechLegend(segments)
     RomajiLine(segments)
-    Text(
-        "English translation of the whole bubble arrives with DeepL in Phase 5.",
-        style = MaterialTheme.typography.bodySmall,
-    )
+    // Ask once when the sentence appears (instant if the page was already translated).
+    LaunchedEffect(Unit) { onNeedTranslation() }
+    HorizontalDivider()
+    when (translation) {
+        is TranslationState.Done -> Text(translation.english, style = MaterialTheme.typography.titleMedium)
+        is TranslationState.Failed -> Text(translation.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        TranslationState.Loading, null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            Text("Translating…", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+    Text("Translated by DeepL", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Actions {
         Button(onClick = onSave, enabled = !saved) { Text(if (saved) "Saved ✓" else "Save sentence") }
         if (onBack != null) OutlinedButton(onClick = onBack) { Text("‹ Back to word") }

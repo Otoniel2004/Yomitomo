@@ -47,6 +47,10 @@ import io.github.otoniel2004.mangareaderjp.reader.page.AnalyzedBlock
 import io.github.otoniel2004.mangareaderjp.reader.page.PageAnalyzer
 import io.github.otoniel2004.mangareaderjp.reader.page.PageWord
 import io.github.otoniel2004.mangareaderjp.srs.Srs
+import io.github.otoniel2004.mangareaderjp.translation.TranslationException
+import io.github.otoniel2004.mangareaderjp.translation.TranslationState
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import kotlinx.coroutines.CoroutineScope
@@ -94,6 +98,7 @@ class ScreenReaderService : Service() {
         private const val MASK_MARGIN = 8
         private const val TOUCH_MARGIN = 8
         private const val CROP_MARGIN = 16
+        private const val MAX_REMEMBERED = 300
 
         fun start(context: Context, resultCode: Int, data: Intent) {
             val intent = Intent(context, ScreenReaderService::class.java)
@@ -125,6 +130,10 @@ class ScreenReaderService : Service() {
     private val container get() = (application as MangaReaderApp).container
     private val pageAnalyzer by lazy { PageAnalyzer(container.analyzer, container.dictionary) }
     private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** English for each bubble text on recent pages, watched by the open popup. */
+    private val translations = MutableStateFlow<Map<String, TranslationState>>(emptyMap())
+    @Volatile private var previousPageText: String? = null
 
     @Volatile private var stopRequested = false // the user turned the reader off in our app
     @Volatile private var shuttingDown = false
@@ -309,6 +318,7 @@ class ScreenReaderService : Service() {
                     )
                 }
                 statusOverlay?.setState(StatusOverlay.State.NewPage(pages, blocks.size))
+                if (settings.autoTranslate) translatePage(blocks.map { it.block.text })
                 notifyStatus()
             }
         }
@@ -342,14 +352,26 @@ class ScreenReaderService : Service() {
             val analyzed = currentPage?.blocks?.getOrNull(block) ?: return
             val word = analyzed.wordAt((screenX / captureToScreen).toInt(), (screenY / captureToScreen).toInt()) ?: return
             showPopup { close ->
-                ReaderPopup(word, analyzed.segments, isLowerHalf(screenY), { saveWord(analyzed, it) }, { saveSentence(analyzed) }, close)
+                ReaderPopup(
+                    word, analyzed.segments, analyzed.block.text, translations, isLowerHalf(screenY),
+                    onSaveWord = { saveWord(analyzed, it) },
+                    onSaveSentence = { saveSentence(analyzed) },
+                    onNeedTranslation = { ensureTranslation(analyzed.block.text) },
+                    onClose = close,
+                )
             }
         }
 
         override fun onDoubleTap(block: Int, screenX: Int, screenY: Int) {
             val analyzed = currentPage?.blocks?.getOrNull(block) ?: return
             showPopup { close ->
-                ReaderPopup(null, analyzed.segments, isLowerHalf(screenY), { saveWord(analyzed, it) }, { saveSentence(analyzed) }, close)
+                ReaderPopup(
+                    null, analyzed.segments, analyzed.block.text, translations, isLowerHalf(screenY),
+                    onSaveWord = { saveWord(analyzed, it) },
+                    onSaveSentence = { saveSentence(analyzed) },
+                    onNeedTranslation = { ensureTranslation(analyzed.block.text) },
+                    onClose = close,
+                )
             }
         }
     }
@@ -387,12 +409,55 @@ class ScreenReaderService : Service() {
             type = ItemType.SENTENCE,
             text = analyzed.block.text,
             segments = analyzed.segments,
+            translation = (translations.value[analyzed.block.text] as? TranslationState.Done)?.english,
             source = "Reader",
             createdAt = System.currentTimeMillis(),
             srs = Srs.newCard(System.currentTimeMillis()),
         ),
         analyzed,
     )
+
+    // ── Translation ──────────────────────────────────────
+
+    /**
+     * Translates every bubble of a new page in one DeepL request, with the previous page as
+     * context (better pronouns and tone, not billed). Cached texts cost nothing.
+     */
+    private fun translatePage(texts: List<String>) {
+        val context = previousPageText
+        previousPageText = texts.joinToString("\n")
+        requestTranslation(texts, context)
+    }
+
+    /**
+     * Called when a popup shows the whole sentence. With automatic translation off, this is
+     * the only time quota is spent: when you actually ask for the sentence. Failed attempts
+     * (no connection…) are retried.
+     */
+    private fun ensureTranslation(text: String) {
+        val state = translations.value[text]
+        if (state is TranslationState.Done || state == TranslationState.Loading) return
+        requestTranslation(listOf(text), previousPageText)
+    }
+
+    private fun requestTranslation(texts: List<String>, context: String?) {
+        val pending = texts.filter { translations.value[it] !is TranslationState.Done }
+        if (pending.isEmpty()) return
+        if (!container.translations.isConfigured) {
+            translations.update { it + pending.associateWith { TranslationState.Failed(TranslationException.NoKey().message.orEmpty()) } }
+            return
+        }
+        translations.update { it + pending.associateWith { TranslationState.Loading } }
+        saveScope.launch {
+            val result: Map<String, TranslationState> = try {
+                container.translations.translate(pending, context).mapValues { TranslationState.Done(it.value) }
+            } catch (e: TranslationException) {
+                pending.associateWith { TranslationState.Failed(e.message.orEmpty()) }
+            }
+            // Keep the map small: only the latest texts matter to the popups.
+            translations.update { (it + result).entries.toList().takeLast(MAX_REMEMBERED).associate { e -> e.key to e.value } }
+        }
+    }
 
     /** Saves silently (the user stays in the manga) with a crop of the bubble. */
     private fun save(item: SavedItem, analyzed: AnalyzedBlock) {

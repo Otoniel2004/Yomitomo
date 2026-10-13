@@ -60,7 +60,7 @@ fun HomeScreen(
                 title = { Text("Manga Reader JP") },
                 actions = {
                     IconButton(onClick = onOpenOptions) {
-                        Icon(painterResource(R.drawable.ic_tune), contentDescription = "Reader options")
+                        Icon(painterResource(R.drawable.ic_tune), contentDescription = "Settings")
                     }
                 },
             )
