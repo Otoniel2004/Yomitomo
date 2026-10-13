@@ -64,6 +64,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mlkit.text.japanese)
+    implementation(libs.mlkit.translate)
     implementation(libs.kuromoji.ipadic)
 
     testImplementation(libs.junit)

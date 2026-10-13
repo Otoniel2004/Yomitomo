@@ -1,5 +1,6 @@
 package io.github.otoniel2004.mangareaderjp.translation
 
+import android.util.Log
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -28,7 +29,13 @@ data class DeepLUsage(val used: Long, val limit: Long)
  * Calls block: use them off the main thread.
  */
 class DeepLClient(private val apiKey: () -> String?) {
-    private val json = Json { ignoreUnknownKeys = true }
+    // encodeDefaults: send source/target language even though they are default values (without it
+    // DeepL got no target_lang and answered 400). explicitNulls = false: omit "context" when absent.
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+        explicitNulls = false
+    }
 
     @Serializable
     private data class TranslateRequest(
@@ -54,10 +61,13 @@ class DeepLClient(private val apiKey: () -> String?) {
     /** Translates [texts] (Japanese → English), in order. At most 50 texts per call (DeepL limit). */
     fun translate(texts: List<String>, context: String? = null): List<String> {
         require(texts.size <= MAX_TEXTS) { "DeepL accepts at most $MAX_TEXTS texts per request" }
-        val body = json.encodeToString(TranslateRequest.serializer(), TranslateRequest(texts, context = context?.takeIf { it.isNotBlank() }))
-        val response = json.decodeFromString(TranslateResponse.serializer(), request("/v2/translate", body))
+        val response = json.decodeFromString(TranslateResponse.serializer(), request("/v2/translate", requestBody(texts, context)))
         return response.translations.map { it.text }
     }
+
+    /** The JSON sent to /v2/translate (internal so tests can check it). */
+    internal fun requestBody(texts: List<String>, context: String?): String =
+        json.encodeToString(TranslateRequest.serializer(), TranslateRequest(texts, context = context?.takeIf { it.isNotBlank() }))
 
     fun usage(): DeepLUsage {
         val usage = json.decodeFromString(UsageResponse.serializer(), request("/v2/usage", null))
@@ -84,7 +94,12 @@ class DeepLClient(private val apiKey: () -> String?) {
                     401, 403 -> throw TranslationException.InvalidKey()
                     456 -> throw TranslationException.QuotaExceeded()
                     429 -> throw TranslationException.RateLimited()
-                    else -> throw TranslationException.Http(code)
+                    else -> {
+                        // DeepL explains bad requests in the body; log it (never the key) for debugging.
+                        val detail = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                        Log.w(TAG, "DeepL HTTP $code: ${detail.take(300)}")
+                        throw TranslationException.Http(code)
+                    }
                 }
             } finally {
                 connection.disconnect()
@@ -96,5 +111,6 @@ class DeepLClient(private val apiKey: () -> String?) {
 
     companion object {
         const val MAX_TEXTS = 50
+        private const val TAG = "DeepL"
     }
 }

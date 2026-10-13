@@ -47,7 +47,9 @@ import io.github.otoniel2004.mangareaderjp.reader.page.AnalyzedBlock
 import io.github.otoniel2004.mangareaderjp.reader.page.PageAnalyzer
 import io.github.otoniel2004.mangareaderjp.reader.page.PageWord
 import io.github.otoniel2004.mangareaderjp.srs.Srs
+import io.github.otoniel2004.mangareaderjp.translation.BubbleTranslations
 import io.github.otoniel2004.mangareaderjp.translation.TranslationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import io.github.otoniel2004.mangareaderjp.translation.TranslationState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -132,7 +134,10 @@ class ScreenReaderService : Service() {
     private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** English for each bubble text on recent pages, watched by the open popup. */
-    private val translations = MutableStateFlow<Map<String, TranslationState>>(emptyMap())
+    private val translations = MutableStateFlow<Map<String, BubbleTranslations>>(emptyMap())
+    /** On-device translation runs one text at a time, apart from the DeepL calls. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val offlineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
     @Volatile private var previousPageText: String? = null
 
     @Volatile private var stopRequested = false // the user turned the reader off in our app
@@ -409,7 +414,7 @@ class ScreenReaderService : Service() {
             type = ItemType.SENTENCE,
             text = analyzed.block.text,
             segments = analyzed.segments,
-            translation = (translations.value[analyzed.block.text] as? TranslationState.Done)?.english,
+            translation = translations.value[analyzed.block.text]?.best,
             source = "Reader",
             createdAt = System.currentTimeMillis(),
             srs = Srs.newCard(System.currentTimeMillis()),
@@ -435,27 +440,60 @@ class ScreenReaderService : Service() {
      * (no connection…) are retried.
      */
     private fun ensureTranslation(text: String) {
-        val state = translations.value[text]
-        if (state is TranslationState.Done || state == TranslationState.Loading) return
+        val current = translations.value[text]
+        val offlineStarted = current?.offline.isStartedOrDone()
+        val deepLStarted = !container.translations.isConfigured || current?.deepL.isStartedOrDone()
+        if (offlineStarted && deepLStarted) return
         requestTranslation(listOf(text), previousPageText)
     }
 
+    /**
+     * Two translations per bubble, each filling its half as soon as it's ready:
+     *   on-device (ML Kit) – always, one text at a time on its own thread
+     *   DeepL              – only with a key; failures are kept quiet, the on-device one covers them
+     */
     private fun requestTranslation(texts: List<String>, context: String?) {
-        val pending = texts.filter { translations.value[it] !is TranslationState.Done }
-        if (pending.isEmpty()) return
-        if (!container.translations.isConfigured) {
-            translations.update { it + pending.associateWith { TranslationState.Failed(TranslationException.NoKey().message.orEmpty()) } }
-            return
-        }
-        translations.update { it + pending.associateWith { TranslationState.Loading } }
-        saveScope.launch {
-            val result: Map<String, TranslationState> = try {
-                container.translations.translate(pending, context).mapValues { TranslationState.Done(it.value) }
-            } catch (e: TranslationException) {
-                pending.associateWith { TranslationState.Failed(e.message.orEmpty()) }
+        val offlinePending = texts.filter { !translations.value[it]?.offline.isStartedOrDone() }
+        val deepLPending = if (!container.translations.isConfigured) emptyList()
+        else texts.filter { !translations.value[it]?.deepL.isStartedOrDone() }
+
+        if (offlinePending.isNotEmpty()) {
+            updateBubbles(offlinePending) { it.copy(offline = TranslationState.Loading) }
+            offlineScope.launch {
+                for (text in offlinePending) {
+                    val state = try {
+                        TranslationState.Done(container.offlineTranslator.translate(text))
+                    } catch (e: Exception) {
+                        Log.w(TAG, "On-device translation failed", e)
+                        TranslationState.Failed(e.message.orEmpty())
+                    }
+                    updateBubbles(listOf(text)) { it.copy(offline = state) }
+                }
             }
-            // Keep the map small: only the latest texts matter to the popups.
-            translations.update { (it + result).entries.toList().takeLast(MAX_REMEMBERED).associate { e -> e.key to e.value } }
+        }
+        if (deepLPending.isNotEmpty()) {
+            updateBubbles(deepLPending) { it.copy(deepL = TranslationState.Loading) }
+            saveScope.launch {
+                val results: Map<String, TranslationState> = try {
+                    val english = container.translations.translate(deepLPending, context)
+                    deepLPending.associateWith { text -> english[text]?.let { TranslationState.Done(it) } ?: TranslationState.Failed("") }
+                } catch (e: TranslationException) {
+                    Log.w(TAG, "DeepL translation failed: ${e.message}")
+                    deepLPending.associateWith { TranslationState.Failed(e.message.orEmpty()) }
+                }
+                results.forEach { (text, state) -> updateBubbles(listOf(text)) { it.copy(deepL = state) } }
+            }
+        }
+    }
+
+    private fun TranslationState?.isStartedOrDone() = this is TranslationState.Done || this == TranslationState.Loading
+
+    /** Updates some bubbles' translations; keeps only the latest ones (all a popup can need). */
+    private fun updateBubbles(texts: List<String>, change: (BubbleTranslations) -> BubbleTranslations) {
+        translations.update { map ->
+            val updated = map + texts.associateWith { change(map[it] ?: BubbleTranslations()) }
+            if (updated.size <= MAX_REMEMBERED) updated
+            else updated.entries.toList().takeLast(MAX_REMEMBERED).associate { it.key to it.value }
         }
     }
 

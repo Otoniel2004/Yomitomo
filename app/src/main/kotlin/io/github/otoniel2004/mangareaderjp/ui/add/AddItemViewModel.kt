@@ -121,15 +121,25 @@ class AddItemViewModel(
     fun setTranslation(text: String) = state.update { it.copy(translation = text) }
 
     /** Fills the translation with DeepL (cached, so the same sentence is never paid for twice). */
+    /** DeepL when it works; otherwise the on-device translator, quietly. */
     fun translate() {
         val text = state.value.draft?.text?.takeIf { it.isNotBlank() } ?: return
         state.update { it.copy(translating = true, translationError = null) }
         viewModelScope.launch {
-            try {
-                val english = withContext(Dispatchers.IO) { container.translations.translate(listOf(text)) }[text]
-                state.update { it.copy(translating = false, translation = english ?: it.translation) }
-            } catch (e: TranslationException) {
-                state.update { it.copy(translating = false, translationError = e.message) }
+            val english = withContext(Dispatchers.IO) {
+                val deepL = try {
+                    if (container.translations.isConfigured) container.translations.translate(listOf(text))[text] else null
+                } catch (e: TranslationException) {
+                    null
+                }
+                deepL ?: runCatching { container.offlineTranslator.translate(text) }.getOrNull()
+            }
+            state.update {
+                it.copy(
+                    translating = false,
+                    translation = english ?: it.translation,
+                    translationError = if (english == null) "Translation unavailable right now." else null,
+                )
             }
         }
     }

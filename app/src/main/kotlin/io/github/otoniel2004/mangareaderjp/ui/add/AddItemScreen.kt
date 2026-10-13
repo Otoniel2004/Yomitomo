@@ -166,7 +166,7 @@ fun AddItemScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedButton(onClick = viewModel::translate, enabled = !state.translating) {
-                        Text(if (state.translating) "Translating…" else "Translate with DeepL")
+                        Text(if (state.translating) "Translating…" else "Translate")
                     }
                 } else {
                     OutlinedTextField(

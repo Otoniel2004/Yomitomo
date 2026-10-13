@@ -9,6 +9,7 @@ import io.github.otoniel2004.mangareaderjp.data.SavedItemRepository
 import io.github.otoniel2004.mangareaderjp.data.SecretStore
 import io.github.otoniel2004.mangareaderjp.data.SettingsRepository
 import io.github.otoniel2004.mangareaderjp.translation.DeepLClient
+import io.github.otoniel2004.mangareaderjp.translation.OfflineTranslator
 import io.github.otoniel2004.mangareaderjp.translation.RoomTranslationCache
 import io.github.otoniel2004.mangareaderjp.translation.TranslationRepository
 import io.github.otoniel2004.mangareaderjp.dictionary.JmDictionary
@@ -51,6 +52,9 @@ class AppContainer(context: Context) {
         translateRemote = deepL::translate,
         hasKey = { secrets.get(SecretStore.DEEPL_API_KEY) != null },
     )
+
+    /** On-device Japanese → English (downloads its model on first use). */
+    val offlineTranslator by lazy { OfflineTranslator() }
 
     val dictionary = JmDictionary(context)
     val analyzer = JapaneseAnalyzer()

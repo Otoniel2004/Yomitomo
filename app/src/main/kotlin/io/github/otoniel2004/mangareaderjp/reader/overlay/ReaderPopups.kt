@@ -43,6 +43,7 @@ import io.github.otoniel2004.mangareaderjp.ui.components.PartOfSpeechLegend
 import io.github.otoniel2004.mangareaderjp.ui.components.RomajiLine
 import io.github.otoniel2004.mangareaderjp.ui.components.label
 import io.github.otoniel2004.mangareaderjp.ui.home.label
+import io.github.otoniel2004.mangareaderjp.translation.BubbleTranslations
 import io.github.otoniel2004.mangareaderjp.translation.TranslationState
 import io.github.otoniel2004.mangareaderjp.ui.theme.MangaReaderTheme
 import kotlinx.coroutines.flow.StateFlow
@@ -61,7 +62,7 @@ fun ReaderPopup(
     word: PageWord?,
     sentence: List<Segment>,
     sourceText: String,
-    translations: StateFlow<Map<String, TranslationState>>,
+    translations: StateFlow<Map<String, BubbleTranslations>>,
     atTop: Boolean,
     onSaveWord: (PageWord) -> Unit,
     onSaveSentence: () -> Unit,
@@ -160,7 +161,7 @@ private fun WordView(word: PageWord, saved: Boolean, onSave: () -> Unit, onShowS
 @Composable
 private fun SentenceView(
     segments: List<Segment>,
-    translation: TranslationState?,
+    translation: BubbleTranslations?,
     onNeedTranslation: () -> Unit,
     saved: Boolean,
     onSave: () -> Unit,
@@ -174,15 +175,14 @@ private fun SentenceView(
     // Ask once when the sentence appears (instant if the page was already translated).
     LaunchedEffect(Unit) { onNeedTranslation() }
     HorizontalDivider()
-    when (translation) {
-        is TranslationState.Done -> Text(translation.english, style = MaterialTheme.typography.titleMedium)
-        is TranslationState.Failed -> Text(translation.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-        TranslationState.Loading, null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            Text("Translating…", style = MaterialTheme.typography.bodyMedium)
-        }
+    // DeepL first (best quality), then the on-device one. Errors are not shown: whichever
+    // translation worked is enough; only if both fail does the popup say so.
+    TranslationLine("DeepL", translation?.deepL, loadingText = "Translating…")
+    TranslationLine("On-device", translation?.offline, loadingText = "Translating (the first time also downloads the offline model)…")
+    val deepLFailed = translation?.deepL.let { it == null || it is TranslationState.Failed }
+    if (deepLFailed && translation?.offline is TranslationState.Failed) {
+        Text("Translation unavailable right now.", style = MaterialTheme.typography.bodyMedium)
     }
-    Text("Translated by DeepL", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Actions {
         Button(onClick = onSave, enabled = !saved) { Text(if (saved) "Saved ✓" else "Save sentence") }
         if (onBack != null) OutlinedButton(onClick = onBack) { Text("‹ Back to word") }
@@ -196,4 +196,20 @@ private fun Actions(content: @Composable () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) { content() }
+}
+
+/** One labelled translation: the text when done, a spinner while loading, nothing if it failed. */
+@Composable
+private fun TranslationLine(label: String, state: TranslationState?, loadingText: String) {
+    when (state) {
+        is TranslationState.Done -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Text(state.english, style = MaterialTheme.typography.titleMedium)
+        }
+        TranslationState.Loading -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            Text("$label: $loadingText", style = MaterialTheme.typography.bodySmall)
+        }
+        is TranslationState.Failed, null -> Unit
+    }
 }
