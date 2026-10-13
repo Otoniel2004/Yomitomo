@@ -1,0 +1,33 @@
+# ── Build / IDE ──────────────────────────────
+.gradle/
+build/
+.kotlin/
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# ── Local machine (SDK path etc.) ───────────
+local.properties
+
+# ── SECRETS: never commit ──────────────────
+# API keys, credentials, signing keystores.
+.env
+.env.*
+!.env.example
+secrets.properties
+*.secrets
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+google-services.json
+deepl*.txt
+
+# ── OS ───────────────────────────────────────
+.DS_Store
+Thumbs.db

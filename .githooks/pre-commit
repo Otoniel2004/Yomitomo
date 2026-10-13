@@ -1,0 +1,38 @@
+#!/bin/sh
+# Secret-leak guard: runs before EVERY commit.
+# Blocks the commit if any staged file looks like it contains a key or credential.
+# Enable with:  git config core.hooksPath .githooks
+
+fail=0
+
+# 1) Files that must never be committed, even with "git add -f".
+blocked=$(git diff --cached --name-only --diff-filter=ACMR |
+    grep -E '(^|/)(local\.properties|\.env(\..*)?|secrets\.properties|google-services\.json)$|\.(jks|keystore|p12|pem|key)$' |
+    grep -v -E '(^|/)\.env\.example$')
+if [ -n "$blocked" ]; then
+    echo "BLOCKED: sensitive files in the commit:"
+    echo "$blocked" | sed 's/^/  - /'
+    fail=1
+fi
+
+# 2) Content that looks like a key. Only added lines are checked.
+#    - DeepL key: a uuid followed by ":fx" (Free plan) or a bare uuid
+#    - generic patterns: api_key=..., secret=..., token=..., password=... with a long value
+#    - PEM private keys
+patterns='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:fx)?|(api[_-]?key|secret|token|password|auth)["'"'"' ]*[:=] *["'"'"']?[A-Za-z0-9_:.-]{16,}|-----BEGIN [A-Z ]*PRIVATE KEY-----'
+hits=$(git diff --cached -U0 --diff-filter=ACMR -- . ':(exclude).githooks/*' |
+    grep -E '^\+[^+]' |
+    grep -i -E "$patterns")
+if [ -n "$hits" ]; then
+    echo "BLOCKED: lines that look like secrets:"
+    echo "$hits" | cut -c1-120 | sed 's/^/  /'
+    fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+    echo
+    echo "Remove the secret from the commit (git restore --staged <file>)."
+    echo "API keys live only on the phone, typed into the app's Settings screen."
+    exit 1
+fi
+exit 0
