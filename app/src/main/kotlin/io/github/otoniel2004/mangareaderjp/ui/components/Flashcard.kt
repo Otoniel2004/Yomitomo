@@ -53,7 +53,7 @@ fun Flashcard(
                 segments = item.segments,
                 showFurigana = item.showFurigana,
                 fontSize = if (item.type == ItemType.SENTENCE) 24.sp else 34.sp,
-                highlightParticles = item.type == ItemType.SENTENCE,
+                colorByPart = true,
             )
 
             if (!revealed) {

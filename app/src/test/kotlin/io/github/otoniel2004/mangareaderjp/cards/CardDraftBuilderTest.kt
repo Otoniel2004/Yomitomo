@@ -52,6 +52,16 @@ class CardDraftBuilderTest {
     }
 
     @Test
+    fun `full-width symbols are punctuation and unknown katakana gets a reading`() {
+        val segments = builder.fromJapanese("ゼブラック大賞！").segments
+        assertEquals(PartOfSpeech.PUNCTUATION, segments.last().pos)
+        val katakana = segments.first { it.surface.startsWith("ゼ") }
+        assertEquals("ぜぶらっく", katakana.reading?.take(5))
+        assertEquals(true, JapaneseAnalyzer.isPunctuation("！？"))
+        assertEquals(false, JapaneseAnalyzer.isPunctuation("大賞"))
+    }
+
+    @Test
     fun `japanese single word, even conjugated, is a word card`() {
         assertEquals(ItemType.WORD, builder.fromJapanese("勉強").type)
         val conjugated = builder.fromJapanese("食べなかった")

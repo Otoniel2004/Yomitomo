@@ -129,7 +129,7 @@ private fun SavedItemCard(item: SavedItem, isDue: Boolean, onClick: () -> Unit) 
             FuriganaText(
                 segments = item.segments,
                 showFurigana = item.showFurigana,
-                highlightParticles = item.type == ItemType.SENTENCE,
+                colorByPart = true,
             )
             Text(
                 item.summary,

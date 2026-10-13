@@ -33,6 +33,7 @@ import io.github.otoniel2004.mangareaderjp.data.ItemType
 import io.github.otoniel2004.mangareaderjp.data.Segment
 import io.github.otoniel2004.mangareaderjp.reader.page.PageWord
 import io.github.otoniel2004.mangareaderjp.ui.components.FuriganaText
+import io.github.otoniel2004.mangareaderjp.ui.components.PartOfSpeechLegend
 import io.github.otoniel2004.mangareaderjp.ui.components.RomajiLine
 import io.github.otoniel2004.mangareaderjp.ui.components.label
 import io.github.otoniel2004.mangareaderjp.ui.home.label
@@ -117,7 +118,7 @@ private fun WordView(word: PageWord, saved: Boolean, onSave: () -> Unit, onShowS
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.primary,
     )
-    FuriganaText(word.segments, showFurigana = true, fontSize = 32.sp)
+    FuriganaText(word.segments, showFurigana = true, fontSize = 32.sp, colorByPart = true)
     RomajiLine(word.segments)
 
     val entry = word.entry
@@ -149,7 +150,8 @@ private fun SentenceView(
     onClose: () -> Unit,
 ) {
     Text(ItemType.SENTENCE.label(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-    FuriganaText(segments, showFurigana = true, fontSize = 24.sp, highlightParticles = true)
+    FuriganaText(segments, showFurigana = true, fontSize = 24.sp, colorByPart = true)
+    PartOfSpeechLegend(segments)
     RomajiLine(segments)
     Text(
         "English translation of the whole bubble arrives with DeepL in Phase 5.",

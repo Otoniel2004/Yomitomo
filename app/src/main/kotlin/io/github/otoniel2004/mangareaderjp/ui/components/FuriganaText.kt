@@ -7,7 +7,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -17,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.otoniel2004.mangareaderjp.data.PartOfSpeech
 import io.github.otoniel2004.mangareaderjp.data.Segment
+import io.github.otoniel2004.mangareaderjp.japanese.JapaneseAnalyzer
 import io.github.otoniel2004.mangareaderjp.japanese.Romaji
 import io.github.otoniel2004.mangareaderjp.japanese.rubyParts
 
@@ -27,7 +27,8 @@ import io.github.otoniel2004.mangareaderjp.japanese.rubyParts
  * Columns are laid out in a FlowRow, which wraps when it runs out of space.
  * With furigana off, the top line disappears.
  *
- * highlightParticles: paints particles (は, が, を...) with the accent color.
+ * colorByPart: paints each word with the color of its part of speech (noun, verb, particle…,
+ * see [color]); particles are also bold.
  */
 @Composable
 fun FuriganaText(
@@ -35,57 +36,78 @@ fun FuriganaText(
     showFurigana: Boolean,
     modifier: Modifier = Modifier,
     fontSize: TextUnit = 22.sp,
-    highlightParticles: Boolean = false,
+    colorByPart: Boolean = false,
 ) {
     val rubySize = fontSize * 0.5f
     val baseColor = LocalContentColor.current
-    val particleColor = MaterialTheme.colorScheme.tertiary
+
+    // Every piece in order, so each one knows whether its neighbors carry a reading.
+    val pieces = segments.flatMap { segment -> rubyParts(segment.surface, segment.reading).map { segment to it } }
 
     FlowRow(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        for (segment in segments) {
-            val isParticle = highlightParticles && segment.pos == PartOfSpeech.PARTICLE
-            val color = if (isParticle) particleColor else baseColor
-            for (part in rubyParts(segment.surface, segment.reading)) {
-                RubyColumn(overhang = fontSize) {
-                    if (showFurigana) {
-                        Text(
-                            text = part.ruby ?: "",
-                            fontSize = rubySize,
-                            lineHeight = rubySize * 1.2f,
-                            color = baseColor.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            softWrap = false,
-                        )
-                    }
+        pieces.forEachIndexed { index, (segment, part) ->
+            val pos = segment.displayPos
+            val isParticle = colorByPart && pos == PartOfSpeech.PARTICLE
+            val color = (if (colorByPart) pos.color() else null) ?: baseColor
+            RubyColumn(
+                overhang = fontSize,
+                overhangLeft = pieces.getOrNull(index - 1)?.second?.ruby == null,
+                overhangRight = pieces.getOrNull(index + 1)?.second?.ruby == null,
+            ) {
+                if (showFurigana) {
                     Text(
-                        text = part.text,
-                        fontSize = fontSize,
-                        lineHeight = fontSize * 1.2f,
-                        color = color,
-                        fontWeight = if (isParticle) FontWeight.Bold else null,
+                        text = part.ruby ?: "",
+                        fontSize = rubySize,
+                        lineHeight = rubySize * 1.2f,
+                        color = baseColor.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
+                Text(
+                    text = part.text,
+                    fontSize = fontSize,
+                    lineHeight = fontSize * 1.2f,
+                    color = color,
+                    fontWeight = if (isParticle) FontWeight.Bold else null,
+                )
             }
         }
     }
 }
 
 /**
- * Reading on top, text below, both centered. Like real Japanese typesetting, a reading wider
- * than its kanji may overhang the neighbors by up to half of [overhang] on each side, so
- * 諦(あきら)めない doesn't get a gap between 諦 and め. Children: [ruby,] base.
+ * Reading on top, text below. Like real Japanese typesetting, a reading wider than its kanji
+ * may overhang a neighbor by up to half of [overhang] — but only a neighbor without its own
+ * reading (kana), so 諦(あきら)めない has no gap while 大賞投票 readings never collide.
+ * Children: [ruby,] base.
  */
 @Composable
-private fun RubyColumn(overhang: TextUnit, content: @Composable () -> Unit) {
+private fun RubyColumn(
+    overhang: TextUnit,
+    overhangLeft: Boolean,
+    overhangRight: Boolean,
+    content: @Composable () -> Unit,
+) {
     Layout(content) { measurables, _ ->
         val placeables = measurables.map { it.measure(Constraints()) }
         val base = placeables.last()
         val ruby = placeables.getOrNull(placeables.size - 2)
-        val width = maxOf(base.width, (ruby?.width ?: 0) - overhang.roundToPx())
+        val half = overhang.roundToPx() / 2
+        val left = if (overhangLeft) half else 0
+        val right = if (overhangRight) half else 0
+        val width = maxOf(base.width, (ruby?.width ?: 0) - left - right)
+        // Where the reading starts: centered, then pushed back inside on a side that can't overhang.
+        val rubyX = ruby?.let {
+            ((width - it.width) / 2)
+                .coerceAtLeast(if (overhangLeft) -half else 0)
+                .coerceAtMost(width - it.width + if (overhangRight) half else 0)
+        } ?: 0
         layout(width, placeables.sumOf { it.height }) {
             var y = 0
             for (placeable in placeables) {
-                placeable.place((width - placeable.width) / 2, y)
+                val x = if (placeable === ruby) rubyX else (width - placeable.width) / 2
+                placeable.place(x, y)
                 y += placeable.height
             }
         }
@@ -121,5 +143,9 @@ fun PartOfSpeech.label(): String = when (this) {
     PartOfSpeech.OTHER -> "other"
 }
 
-@Composable
-fun particleColor(): Color = MaterialTheme.colorScheme.tertiary
+/**
+ * Part of speech to display. Cards saved before the punctuation fix may have "！" stored as
+ * a noun, so symbols are always shown as punctuation.
+ */
+val Segment.displayPos: PartOfSpeech
+    get() = if (JapaneseAnalyzer.isPunctuation(surface)) PartOfSpeech.PUNCTUATION else pos

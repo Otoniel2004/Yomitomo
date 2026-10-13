@@ -27,12 +27,18 @@ class JapaneseAnalyzer {
 
     fun analyze(text: String): List<Morpheme> = tokenizer.tokenize(text).map { token ->
         val surface = token.surface
+        // Words the tokenizer doesn't know (names like コミックシーモア) come without a reading;
+        // pure katakana is read as written.
         val reading = token.reading.takeIf { it != "*" }?.let(JapaneseText::toHiragana)
+            ?: surface.takeIf { s -> s.all { JapaneseText.isKatakana(it) } }?.let(JapaneseText::toHiragana)
+        // IPADIC tags some full-width symbols (！ ？) as nouns: punctuation is punctuation.
+        val pos = if (isPunctuation(surface)) PartOfSpeech.PUNCTUATION
+        else partOfSpeech(token.partOfSpeechLevel1, token.partOfSpeechLevel2)
         Morpheme(
             segment = Segment(
                 surface = surface,
                 reading = reading?.takeIf { JapaneseText.needsFurigana(surface) },
-                pos = partOfSpeech(token.partOfSpeechLevel1, token.partOfSpeechLevel2),
+                pos = pos,
             ),
             baseForm = token.baseForm.takeIf { it != "*" },
         )
@@ -41,6 +47,12 @@ class JapaneseAnalyzer {
     fun segments(text: String): List<Segment> = analyze(text).map { it.segment }
 
     companion object {
+        /** Text made only of symbols: ！？。、「」…〜・ and their ASCII versions. */
+        fun isPunctuation(surface: String) = surface.isNotEmpty() && surface.all { c ->
+            !c.isLetterOrDigit() && !JapaneseText.isKanji(c) && !JapaneseText.isHiragana(c) &&
+                !JapaneseText.isKatakana(c)
+        }
+
         /** IPADIC part-of-speech names (Japanese) → our simplified classes. */
         fun partOfSpeech(level1: String, level2: String): PartOfSpeech = when (level1) {
             "名詞" -> when (level2) {

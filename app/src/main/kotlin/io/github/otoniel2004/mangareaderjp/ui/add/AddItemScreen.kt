@@ -144,7 +144,7 @@ fun AddItemScreen(
                             segments = draft.segments,
                             showFurigana = true,
                             fontSize = 28.sp,
-                            highlightParticles = state.type == ItemType.SENTENCE,
+                            colorByPart = true,
                         )
                         RomajiLine(draft.segments)
                     }

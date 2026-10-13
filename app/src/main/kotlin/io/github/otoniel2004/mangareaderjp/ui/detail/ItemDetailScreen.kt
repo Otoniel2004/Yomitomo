@@ -49,7 +49,9 @@ import io.github.otoniel2004.mangareaderjp.ui.components.Flashcard
 import io.github.otoniel2004.mangareaderjp.ui.components.FuriganaText
 import io.github.otoniel2004.mangareaderjp.ui.components.RomajiLine
 import io.github.otoniel2004.mangareaderjp.ui.components.label
-import io.github.otoniel2004.mangareaderjp.ui.components.particleColor
+import io.github.otoniel2004.mangareaderjp.ui.components.PartOfSpeechLegend
+import io.github.otoniel2004.mangareaderjp.ui.components.color
+import io.github.otoniel2004.mangareaderjp.ui.components.displayPos
 import io.github.otoniel2004.mangareaderjp.ui.home.label
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -122,7 +124,7 @@ fun ItemDetailScreen(id: Long, onBack: () -> Unit) {
 
             current.imagePath?.let { path -> Section("Image") { CardImage(path) } }
 
-            if (current.type == ItemType.SENTENCE) {
+            if (current.type == ItemType.SENTENCE || current.segments.count { it.displayPos != PartOfSpeech.PUNCTUATION } > 1) {
                 Section("Sentence breakdown") { SentenceBreakdown(current.segments, current.showFurigana) }
             }
 
@@ -165,7 +167,7 @@ private fun HeaderCard(item: SavedItem, onToggleFurigana: (Boolean) -> Unit) {
                 segments = item.segments,
                 showFurigana = item.showFurigana,
                 fontSize = if (item.type == ItemType.SENTENCE) 26.sp else 40.sp,
-                highlightParticles = item.type == ItemType.SENTENCE,
+                colorByPart = true,
             )
             RomajiLine(item.segments)
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -183,13 +185,13 @@ private fun HeaderCard(item: SavedItem, onToggleFurigana: (Boolean) -> Unit) {
     }
 }
 
-/** Lists each piece of the sentence with its romaji and part of speech; particles highlighted. */
+/** Lists each piece of the sentence with its romaji and part of speech, each in its color. */
 @Composable
 private fun SentenceBreakdown(segments: List<Segment>, showFurigana: Boolean) {
-    segments.filter { it.pos != PartOfSpeech.PUNCTUATION }.forEach { segment ->
-        val isParticle = segment.pos == PartOfSpeech.PARTICLE
+    PartOfSpeechLegend(segments)
+    segments.filter { it.displayPos != PartOfSpeech.PUNCTUATION }.forEach { segment ->
         Row(verticalAlignment = Alignment.Bottom) {
-            FuriganaText(listOf(segment), showFurigana, fontSize = 20.sp, highlightParticles = true)
+            FuriganaText(listOf(segment), showFurigana, fontSize = 20.sp, colorByPart = true)
             Text("  ")
             Text(
                 Romaji.fromSegments(listOf(segment)) + " · ",
@@ -197,9 +199,9 @@ private fun SentenceBreakdown(segments: List<Segment>, showFurigana: Boolean) {
                 fontStyle = FontStyle.Italic,
             )
             Text(
-                segment.pos.label(),
+                segment.displayPos.label(),
                 style = MaterialTheme.typography.labelLarge,
-                color = if (isParticle) particleColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = segment.displayPos.color() ?: MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
