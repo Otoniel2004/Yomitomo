@@ -5,7 +5,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,11 +39,50 @@ import io.github.otoniel2004.mangareaderjp.ui.home.label
 import io.github.otoniel2004.mangareaderjp.ui.theme.MangaReaderTheme
 
 /**
- * The card shown over the manga. It goes to the half of the screen away from the tapped
- * text ([atTop]), so the text stays visible. A dim tap anywhere outside closes it.
+ * The popup over the manga. Two views of the same bubble, switchable with a button:
+ *
+ *   1 tap  → word view      ── "Whole sentence ›" ──►  sentence view
+ *   2 taps → sentence view  ◄── "‹ Back to word" ──    (only if opened from a word)
+ *
+ * It goes to the half of the screen away from the tapped text ([atTop]); a tap on the dim
+ * area outside closes it.
  */
 @Composable
-fun PopupFrame(atTop: Boolean, onClose: () -> Unit, content: @Composable () -> Unit) {
+fun ReaderPopup(
+    word: PageWord?,
+    sentence: List<Segment>,
+    atTop: Boolean,
+    onSaveWord: (PageWord) -> Unit,
+    onSaveSentence: () -> Unit,
+    onClose: () -> Unit,
+) {
+    var showSentence by remember { mutableStateOf(word == null) }
+    var wordSaved by remember { mutableStateOf(false) }
+    var sentenceSaved by remember { mutableStateOf(false) }
+
+    PopupFrame(atTop, onClose) {
+        if (word == null || showSentence) {
+            SentenceView(
+                segments = sentence,
+                saved = sentenceSaved,
+                onSave = { sentenceSaved = true; onSaveSentence() },
+                onBack = if (word != null) ({ showSentence = false }) else null,
+                onClose = onClose,
+            )
+        } else {
+            WordView(
+                word = word,
+                saved = wordSaved,
+                onSave = { wordSaved = true; onSaveWord(word) },
+                onShowSentence = { showSentence = true },
+                onClose = onClose,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PopupFrame(atTop: Boolean, onClose: () -> Unit, content: @Composable () -> Unit) {
     MangaReaderTheme {
         Box(
             Modifier
@@ -55,7 +95,7 @@ fun PopupFrame(atTop: Boolean, onClose: () -> Unit, content: @Composable () -> U
                     .align(if (atTop) Alignment.TopCenter else Alignment.BottomCenter)
                     .padding(horizontal = 16.dp, vertical = 56.dp)
                     .fillMaxWidth()
-                    .heightIn(max = 420.dp)
+                    .heightIn(max = 460.dp)
                     .pointerInput(Unit) { detectTapGestures { } }, // taps on the card don't close it
             ) {
                 Column(
@@ -69,63 +109,63 @@ fun PopupFrame(atTop: Boolean, onClose: () -> Unit, content: @Composable () -> U
     }
 }
 
-/** 1 tap: one word, with reading, romaji, meanings and Save. */
 @Composable
-fun WordPopup(word: PageWord, atTop: Boolean, onSave: () -> Unit, onClose: () -> Unit) {
-    var saved by remember { mutableStateOf(false) }
-    PopupFrame(atTop, onClose) {
-        val pos = word.segments.firstOrNull()?.pos?.label().orEmpty()
-        Text(
-            listOf(word.type.label(), pos).filter(String::isNotEmpty).joinToString(" · "),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        FuriganaText(word.segments, showFurigana = true, fontSize = 32.sp)
-        RomajiLine(word.segments)
+private fun WordView(word: PageWord, saved: Boolean, onSave: () -> Unit, onShowSentence: () -> Unit, onClose: () -> Unit) {
+    val pos = word.segments.firstOrNull()?.pos?.label().orEmpty()
+    Text(
+        listOf(word.type.label(), pos).filter(String::isNotEmpty).joinToString(" · "),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    FuriganaText(word.segments, showFurigana = true, fontSize = 32.sp)
+    RomajiLine(word.segments)
 
-        val entry = word.entry
-        if (entry != null) {
-            val dictionaryForm = entry.preferredForm
-            if (dictionaryForm != word.text) {
-                Text("Dictionary form: $dictionaryForm (${entry.readings.first()})", style = MaterialTheme.typography.bodyMedium)
-            }
-            entry.meanings().forEachIndexed { i, meaning ->
-                Text("${i + 1}. $meaning", style = MaterialTheme.typography.bodyLarge)
-            }
-        } else {
-            Text("Not found in the dictionary.", style = MaterialTheme.typography.bodyMedium)
+    val entry = word.entry
+    if (entry != null) {
+        val dictionaryForm = entry.preferredForm
+        if (dictionaryForm != word.text) {
+            Text("Dictionary form: $dictionaryForm (${entry.readings.first()})", style = MaterialTheme.typography.bodyMedium)
         }
-
-        SaveRow(saved, label = "Save word", onClose) {
-            saved = true
-            onSave()
+        entry.meanings().forEachIndexed { i, meaning ->
+            Text("${i + 1}. $meaning", style = MaterialTheme.typography.bodyLarge)
         }
+    } else {
+        Text("Not found in the dictionary.", style = MaterialTheme.typography.bodyMedium)
     }
-}
 
-/** 2 taps: the whole bubble, with particles highlighted. */
-@Composable
-fun SentencePopup(segments: List<Segment>, atTop: Boolean, onSave: () -> Unit, onClose: () -> Unit) {
-    var saved by remember { mutableStateOf(false) }
-    PopupFrame(atTop, onClose) {
-        Text(ItemType.SENTENCE.label(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        FuriganaText(segments, showFurigana = true, fontSize = 24.sp, highlightParticles = true)
-        RomajiLine(segments)
-        Text(
-            "English translation of the whole bubble arrives with DeepL in Phase 5.",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        SaveRow(saved, label = "Save sentence", onClose) {
-            saved = true
-            onSave()
-        }
-    }
-}
-
-@Composable
-private fun SaveRow(saved: Boolean, label: String, onClose: () -> Unit, onSave: () -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Button(onClick = onSave, enabled = !saved) { Text(if (saved) "Saved ✓" else label) }
+    Actions {
+        Button(onClick = onSave, enabled = !saved) { Text(if (saved) "Saved ✓" else "Save word") }
+        OutlinedButton(onClick = onShowSentence) { Text("Whole sentence ›") }
         TextButton(onClick = onClose) { Text("Close") }
     }
+}
+
+@Composable
+private fun SentenceView(
+    segments: List<Segment>,
+    saved: Boolean,
+    onSave: () -> Unit,
+    onBack: (() -> Unit)?,
+    onClose: () -> Unit,
+) {
+    Text(ItemType.SENTENCE.label(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+    FuriganaText(segments, showFurigana = true, fontSize = 24.sp, highlightParticles = true)
+    RomajiLine(segments)
+    Text(
+        "English translation of the whole bubble arrives with DeepL in Phase 5.",
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Actions {
+        Button(onClick = onSave, enabled = !saved) { Text(if (saved) "Saved ✓" else "Save sentence") }
+        if (onBack != null) OutlinedButton(onClick = onBack) { Text("‹ Back to word") }
+        TextButton(onClick = onClose) { Text("Close") }
+    }
+}
+
+@Composable
+private fun Actions(content: @Composable () -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) { content() }
 }

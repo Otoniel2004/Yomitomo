@@ -41,9 +41,8 @@ import io.github.otoniel2004.mangareaderjp.data.SavedItem
 import io.github.otoniel2004.mangareaderjp.reader.ocr.Box
 import io.github.otoniel2004.mangareaderjp.reader.overlay.PageOverlay
 import io.github.otoniel2004.mangareaderjp.reader.overlay.PopupOverlay
-import io.github.otoniel2004.mangareaderjp.reader.overlay.SentencePopup
+import io.github.otoniel2004.mangareaderjp.reader.overlay.ReaderPopup
 import io.github.otoniel2004.mangareaderjp.reader.overlay.TouchTargets
-import io.github.otoniel2004.mangareaderjp.reader.overlay.WordPopup
 import io.github.otoniel2004.mangareaderjp.reader.page.AnalyzedBlock
 import io.github.otoniel2004.mangareaderjp.reader.page.PageAnalyzer
 import io.github.otoniel2004.mangareaderjp.reader.page.PageWord
@@ -343,14 +342,14 @@ class ScreenReaderService : Service() {
             val analyzed = currentPage?.blocks?.getOrNull(block) ?: return
             val word = analyzed.wordAt((screenX / captureToScreen).toInt(), (screenY / captureToScreen).toInt()) ?: return
             showPopup { close ->
-                WordPopup(word, atTop = isLowerHalf(screenY), onSave = { saveWord(analyzed, word) }, onClose = close)
+                ReaderPopup(word, analyzed.segments, isLowerHalf(screenY), { saveWord(analyzed, it) }, { saveSentence(analyzed) }, close)
             }
         }
 
         override fun onDoubleTap(block: Int, screenX: Int, screenY: Int) {
             val analyzed = currentPage?.blocks?.getOrNull(block) ?: return
             showPopup { close ->
-                SentencePopup(analyzed.segments, atTop = isLowerHalf(screenY), onSave = { saveSentence(analyzed) }, onClose = close)
+                ReaderPopup(null, analyzed.segments, isLowerHalf(screenY), { saveWord(analyzed, it) }, { saveSentence(analyzed) }, close)
             }
         }
     }
