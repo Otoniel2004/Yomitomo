@@ -6,6 +6,7 @@ import io.github.otoniel2004.mangareaderjp.AppContainer
 import io.github.otoniel2004.mangareaderjp.cards.CardDraft
 import io.github.otoniel2004.mangareaderjp.data.ItemType
 import io.github.otoniel2004.mangareaderjp.data.SavedItem
+import io.github.otoniel2004.mangareaderjp.data.Segment
 import io.github.otoniel2004.mangareaderjp.japanese.Chunk
 import io.github.otoniel2004.mangareaderjp.japanese.RomajiToKana
 import io.github.otoniel2004.mangareaderjp.srs.Srs
@@ -25,6 +26,10 @@ data class AddItemUiState(
     val languageReady: Boolean = false,
     /** Romaji input: the converted pieces, each with its writing options. Empty for Japanese input. */
     val chunks: List<Chunk> = emptyList(),
+    /** Japanese input: its words, so the user can make a card from just some of them. */
+    val tokens: List<Segment> = emptyList(),
+    /** Indexes of tapped words; the card covers the range from the first to the last one. */
+    val selectedTokens: Set<Int> = emptySet(),
     val draft: CardDraft? = null,
     val type: ItemType = ItemType.WORD,
     val meanings: String = "",
@@ -33,6 +38,9 @@ data class AddItemUiState(
     val saved: Boolean = false,
 ) {
     val canSave: Boolean get() = draft != null && draft.text.isNotBlank() && !saved
+
+    /** Range of words the card is made of, or null for the whole text. */
+    val selectedRange: IntRange? get() = if (selectedTokens.isEmpty()) null else selectedTokens.min()..selectedTokens.max()
 }
 
 /**
@@ -80,6 +88,23 @@ class AddItemViewModel(
         }
     }
 
+    /** Tap a word: the card becomes just the selected words; the whole text is kept as context. */
+    fun toggleToken(index: Int) {
+        val current = state.value
+        val selection = if (index in current.selectedTokens) current.selectedTokens - index else current.selectedTokens + index
+        state.update { it.copy(selectedTokens = selection) }
+        typeEdited = false
+        meaningsEdited = false
+        viewModelScope.launch {
+            val text = textFor(current.tokens, selection) ?: current.input
+            val draft = withContext(Dispatchers.Default) { container.drafts.fromJapanese(text) }
+            applyDraft(emptyList(), draft)
+        }
+    }
+
+    private fun textFor(tokens: List<Segment>, selection: Set<Int>): String? =
+        if (selection.isEmpty()) null else tokens.subList(selection.min(), selection.max() + 1).joinToString("") { it.surface }
+
     fun setType(type: ItemType) {
         typeEdited = true
         state.update { it.copy(type = type) }
@@ -103,6 +128,7 @@ class AddItemViewModel(
                     type = current.type,
                     text = draft.text,
                     segments = draft.segments,
+                    contextSegments = if (current.selectedRange != null) current.tokens else emptyList(),
                     meanings = current.meanings.lines().map(String::trim).filter(String::isNotEmpty),
                     translation = current.translation.trim().ifEmpty { null },
                     source = source,
@@ -120,15 +146,19 @@ class AddItemViewModel(
             applyDraft(emptyList(), null)
             return
         }
-        val (chunks, draft) = withContext(Dispatchers.Default) {
-            if (RomajiToKana.looksLikeRomaji(text)) {
-                val chunks = container.converter.convert(text)
-                chunks to container.drafts.fromChunks(chunks)
-            } else {
-                emptyList<Chunk>() to container.drafts.fromJapanese(text)
-            }
-        }
+        val romaji = RomajiToKana.looksLikeRomaji(text)
+        val (chunks, tokens, draft) = withContext(Dispatchers.Default) { analyzeOffMain(text, romaji) }
+        state.update { it.copy(tokens = tokens, selectedTokens = emptySet()) }
         applyDraft(chunks, draft)
+    }
+
+    /** Romaji → chunks with kanji options; Japanese → words the user can pick from. */
+    private fun analyzeOffMain(text: String, romaji: Boolean): Triple<List<Chunk>, List<Segment>, CardDraft> {
+        if (romaji) {
+            val chunks = container.converter.convert(text)
+            return Triple(chunks, emptyList(), container.drafts.fromChunks(chunks))
+        }
+        return Triple(emptyList(), container.analyzer.segments(text), container.drafts.fromJapanese(text))
     }
 
     private fun applyDraft(chunks: List<Chunk>, draft: CardDraft?) {

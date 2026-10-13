@@ -20,6 +20,8 @@ class OcrFilterTest {
     fun `japanese detection`() {
         assertTrue(OcrFilter.isMostlyJapanese("何だと！？"))
         assertTrue(OcrFilter.isMostlyJapanese("コーヒー2杯"))
+        assertTrue(OcrFilter.isMostlyJapanese("ガンガンONLINE")) // mixed text is kept
+        assertFalse(OcrFilter.isMostlyJapanese("https://www.ganganonline.com"))
         assertFalse(OcrFilter.isMostlyJapanese("Chapter 12"))
         assertFalse(OcrFilter.isMostlyJapanese("…！？"))
         assertFalse(OcrFilter.isMostlyJapanese("   "))

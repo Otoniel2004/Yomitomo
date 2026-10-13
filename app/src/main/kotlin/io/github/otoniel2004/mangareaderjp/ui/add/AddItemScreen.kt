@@ -118,6 +118,24 @@ fun AddItemScreen(
                 }
             }
 
+            if (state.tokens.count { it.pos != PartOfSpeech.PUNCTUATION } > 1) {
+                Text(
+                    "Tap words to make a card from just them (the whole text is kept as context)",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val range = state.selectedRange
+                    state.tokens.forEachIndexed { index, token ->
+                        if (token.pos == PartOfSpeech.PUNCTUATION || token.surface.isBlank()) return@forEachIndexed
+                        FilterChip(
+                            selected = range != null && index in range,
+                            onClick = { viewModel.toggleToken(index) },
+                            label = { Text(token.surface, fontSize = 18.sp) },
+                        )
+                    }
+                }
+            }
+
             state.draft?.takeIf { it.text.isNotBlank() }?.let { draft ->
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
