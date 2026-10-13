@@ -3,11 +3,13 @@ package io.github.otoniel2004.mangareaderjp.ui.scan
 import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.otoniel2004.mangareaderjp.AppContainer
@@ -52,7 +54,9 @@ class ScanViewModel(private val container: AppContainer) : ViewModel() {
         state.value = ScanUiState(working = true)
         viewModelScope.launch {
             try {
-                val bitmap = withContext(Dispatchers.IO) { decodeUpright(resolver, uri) }
+                val bitmap = withContext(Dispatchers.IO) {
+                    decodeUpright(resolver, uri).toPlainBitmap().also { deleteOwnPhoto(uri) }
+                }
                 val engine = ocr ?: JapaneseOcr().also { ocr = it }
                 val blocks = withContext(Dispatchers.Default) {
                     val raw = engine.recognize(bitmap)
@@ -65,6 +69,7 @@ class ScanViewModel(private val container: AppContainer) : ViewModel() {
                     error = if (blocks.isEmpty()) "No Japanese text found. Try a closer, sharper photo." else null,
                 )
             } catch (e: Exception) {
+                Log.w(TAG, "Could not read image", e)
                 state.value = ScanUiState(error = "Could not read this image (${e.message}).")
             }
         }
@@ -106,9 +111,30 @@ class ScanViewModel(private val container: AppContainer) : ViewModel() {
         ocr?.close()
     }
 
+    /**
+     * Photos taken through our own camera button live in our cache only until they're read.
+     * Images picked from the gallery belong to the user and are never touched.
+     */
+    private fun deleteOwnPhoto(uri: Uri) {
+        if (uri.authority != "${container.context.packageName}.files") return
+        File(container.context.cacheDir, "scans").listFiles()?.forEach { it.delete() }
+    }
+
     private companion object {
+        const val TAG = "Scan"
         const val MAX_SIZE = 2048
         const val CROP_MARGIN = 16
+
+        /**
+         * A plain 8-bit sRGB copy. Phone cameras (the S24 FE included) save Ultra HDR photos:
+         * a JPEG plus an HDR "gain map". Decoded as is, they can come out in a format the OCR
+         * rejects, so the photo "can't be read" even when it's perfectly sharp.
+         */
+        fun Bitmap.toPlainBitmap(): Bitmap {
+            val plain = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            Canvas(plain).drawBitmap(this, 0f, 0f, null)
+            return plain
+        }
 
         /** Decodes the image the right way up (phone photos store their rotation separately, in EXIF). */
         fun decodeUpright(resolver: ContentResolver, uri: Uri): Bitmap {
