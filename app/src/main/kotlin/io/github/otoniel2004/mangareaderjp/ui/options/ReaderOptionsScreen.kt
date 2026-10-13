@@ -43,6 +43,14 @@ import io.github.otoniel2004.mangareaderjp.data.FuriganaSize
 import io.github.otoniel2004.mangareaderjp.data.ReaderSettings
 import io.github.otoniel2004.mangareaderjp.reader.GestureForwarderService
 import android.content.Intent
+import android.content.ContentResolver
+import android.content.Context
+import android.net.Uri
+import android.os.PowerManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import java.time.LocalDate
 import android.provider.Settings
 import androidx.compose.material3.FilterChip
 import androidx.compose.ui.platform.LocalContext
@@ -74,6 +82,33 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     private val settings = container.settings
     val reader: StateFlow<ReaderSettings> =
         settings.readerSettings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReaderSettings())
+
+    private val backupState = MutableStateFlow<String?>(null)
+    /** Result of the last export/import, shown under the Backup buttons. */
+    val backupMessage: StateFlow<String?> = backupState.asStateFlow()
+
+    fun exportCards(resolver: ContentResolver, uri: Uri) = launch {
+        backupState.value = runCatching {
+            val count = withContext(Dispatchers.IO) {
+                container.backup.export { json ->
+                    resolver.openOutputStream(uri)?.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+                        ?: error("could not open the file")
+                }
+            }
+            "Exported $count cards."
+        }.getOrElse { "Export failed: ${it.message}" }
+    }
+
+    fun importCards(resolver: ContentResolver, uri: Uri) = launch {
+        backupState.value = runCatching {
+            val added = withContext(Dispatchers.IO) {
+                val text = resolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                    ?: error("could not open the file")
+                container.backup.import(text)
+            }
+            if (added == 0) "Nothing new to import (those cards are already here)." else "Imported $added cards."
+        }.getOrElse { "Import failed: ${it.message}" }
+    }
 
     private val deepLState = MutableStateFlow(DeepLUiState())
     val deepL: StateFlow<DeepLUiState> = deepLState.asStateFlow()
@@ -148,6 +183,19 @@ fun ReaderOptionsScreen(onBack: () -> Unit) {
     val deepL by viewModel.deepL.collectAsStateWithLifecycle()
     val swipesEnabled by GestureForwarderService.isConnected.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val backupMessage by viewModel.backupMessage.collectAsStateWithLifecycle()
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) viewModel.exportCards(context.contentResolver, uri)
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.importCards(context.contentResolver, uri)
+    }
+    // Re-checked whenever the screen comes back (e.g. from the battery settings).
+    var unrestrictedBattery by remember { mutableStateOf(isUnrestricted(context)) }
+    LifecycleResumeEffect(Unit) {
+        unrestrictedBattery = isUnrestricted(context)
+        onPauseOrDispose { }
+    }
 
     Scaffold(
         topBar = {
@@ -178,7 +226,22 @@ fun ReaderOptionsScreen(onBack: () -> Unit) {
             )
             HorizontalDivider()
 
+            SectionTitle("Backup")
+            BackupSection(
+                message = backupMessage,
+                onExport = { exportLauncher.launch("manga-reader-cards-${LocalDate.now()}.json") },
+                onImport = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+            )
+            HorizontalDivider()
+
             SectionTitle("Reader")
+            BatteryRow(unrestrictedBattery) {
+                context.startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+            HorizontalDivider()
             OptionRow(
                 title = "Furigana on page",
                 description = "Shows the hiragana reading over kanji and katakana while you read.",
@@ -307,6 +370,40 @@ private fun SwipeRow(enabled: Boolean, onOpenSettings: () -> Unit) {
         if (!enabled) OutlinedButton(onClick = onOpenSettings) { Text("Open Accessibility settings") }
     }
 }
+
+@Composable
+private fun BackupSection(message: String?, onExport: () -> Unit, onImport: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Your cards live only on this phone. Export them to a file (keep it in Drive or on your " +
+                "computer) and import it on any phone. Images and study progress included.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onExport) { Text("Export cards") }
+            OutlinedButton(onClick = onImport) { Text("Import cards") }
+        }
+        message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+    }
+}
+
+/** Samsung (One UI) and other phones may stop background apps; "Unrestricted" keeps the reader alive. */
+@Composable
+private fun BatteryRow(unrestricted: Boolean, onOpenSettings: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Battery: unrestricted", style = MaterialTheme.typography.titleMedium)
+        Text(
+            if (unrestricted) "On. Android won't stop the reader in the background."
+            else "Off. Android may stop the reader while you read. Open the app settings → Battery → " +
+                "Unrestricted.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (!unrestricted) OutlinedButton(onClick = onOpenSettings) { Text("Open app settings") }
+    }
+}
+
+private fun isUnrestricted(context: Context): Boolean =
+    context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName)
 
 @Composable
 private fun SectionTitle(text: String) {

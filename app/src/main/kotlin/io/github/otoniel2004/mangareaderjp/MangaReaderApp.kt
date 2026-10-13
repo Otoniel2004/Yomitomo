@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import io.github.otoniel2004.mangareaderjp.cards.CardDraftBuilder
 import io.github.otoniel2004.mangareaderjp.data.AppDatabase
+import io.github.otoniel2004.mangareaderjp.data.BackupManager
 import io.github.otoniel2004.mangareaderjp.data.SampleData
 import io.github.otoniel2004.mangareaderjp.data.SavedItemRepository
 import io.github.otoniel2004.mangareaderjp.data.SecretStore
@@ -44,6 +45,7 @@ class AppContainer(context: Context) {
     val database = AppDatabase.build(context)
     val items = SavedItemRepository(database.savedItemDao(), context)
     val settings = SettingsRepository(context)
+    val backup = BackupManager(database.savedItemDao()) { items.imagesDir() }
 
     val secrets = SecretStore(context)
     val deepL = DeepLClient { secrets.get(SecretStore.DEEPL_API_KEY) }
