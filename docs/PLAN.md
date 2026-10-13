@@ -186,7 +186,7 @@ Each phase ends with something **testable on the phone**.
 - Unit tests: SM-2 scheduler, furigana splitting, romaji
 - ✅ Test: open the app, see the cards, toggle furigana, study a card
 
-### Phase 2: Background screen capture
+### Phase 2: Background screen capture ✅ (code ready, testing on device)
 - Foreground Service + MediaProjection + notification with a "Stop" action
 - Page change detector (downscaled frames + pixel difference)
 - Debug overlay showing "page changed"

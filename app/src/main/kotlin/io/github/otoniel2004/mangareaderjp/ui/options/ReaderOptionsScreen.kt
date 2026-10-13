@@ -81,7 +81,7 @@ fun ReaderOptionsScreen(onBack: () -> Unit) {
             )
             HorizontalDivider()
             Text(
-                "These options take effect once the screen reader is ready (Phases 2 to 5).",
+                "The status dot applies the next time you turn the reader on. On-page furigana arrives in Phase 4.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(16.dp),
             )

@@ -13,8 +13,8 @@ with spaced repetition, Anki-style.
 | Phase | What | State |
 |---|---|---|
 | 1 | Home, saved cards, furigana, romaji, study (SM-2) | ✅ |
-| 2 | Background screen capture | ⏳ |
-| 3 | Japanese OCR | — |
+| 2 | Background screen capture (page change detection) | ✅ |
+| 3 | Japanese OCR | ⏳ |
 | 4 | On-page furigana + dictionary + 1 tap | — |
 | 5 | Bubble translation (DeepL) + 2 taps | — |
 

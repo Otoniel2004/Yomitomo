@@ -33,7 +33,6 @@ class SavedItemRepository(private val dao: SavedItemDao) {
 
 /** Reader preferences (what is drawn on top of the manga). */
 data class ReaderSettings(
-    val readerEnabled: Boolean = false,
     val showFuriganaOnPage: Boolean = true,
     val showStatusDot: Boolean = true,
 )
@@ -46,7 +45,6 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
  */
 class SettingsRepository(private val context: Context) {
     private object Keys {
-        val READER_ENABLED = booleanPreferencesKey("reader_enabled")
         val FURIGANA_ON_PAGE = booleanPreferencesKey("furigana_on_page")
         val STATUS_DOT = booleanPreferencesKey("status_dot")
         val SEEDED = booleanPreferencesKey("seeded_samples")
@@ -54,13 +52,11 @@ class SettingsRepository(private val context: Context) {
 
     val readerSettings: Flow<ReaderSettings> = context.dataStore.data.map { prefs ->
         ReaderSettings(
-            readerEnabled = prefs[Keys.READER_ENABLED] ?: false,
             showFuriganaOnPage = prefs[Keys.FURIGANA_ON_PAGE] ?: true,
             showStatusDot = prefs[Keys.STATUS_DOT] ?: true,
         )
     }
 
-    suspend fun setReaderEnabled(value: Boolean) = set(Keys.READER_ENABLED, value)
     suspend fun setShowFuriganaOnPage(value: Boolean) = set(Keys.FURIGANA_ON_PAGE, value)
     suspend fun setShowStatusDot(value: Boolean) = set(Keys.STATUS_DOT, value)
 

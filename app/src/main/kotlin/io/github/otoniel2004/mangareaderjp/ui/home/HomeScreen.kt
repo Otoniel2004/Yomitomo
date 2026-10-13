@@ -4,17 +4,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -22,7 +19,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -46,7 +42,7 @@ fun HomeScreen(
     onReview: () -> Unit,
     onOpenOptions: () -> Unit,
 ) {
-    val viewModel = appViewModel { HomeViewModel(it.items, it.settings) }
+    val viewModel = appViewModel { HomeViewModel(it.items) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -66,7 +62,7 @@ fun HomeScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { ReaderToggleCard(state.readerEnabled, viewModel::setReaderEnabled) }
+            item { ReaderControl(state.reader) }
             item { ReviewBanner(dueCount = state.dueIds.size, onReview = onReview) }
             item { FilterRow(state.filter, viewModel::setFilter) }
 
@@ -82,35 +78,6 @@ fun HomeScreen(
             items(state.items, key = { it.id }) { item ->
                 SavedItemCard(item, isDue = item.id in state.dueIds, onClick = { onOpenItem(item.id) })
             }
-        }
-    }
-}
-
-@Composable
-private fun ReaderToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = if (enabled) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surfaceContainerHigh,
-        ),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (enabled) "Reader on" else "Reader off",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    "Reads the screen looking for Japanese while you use another app. " +
-                        "(Screen capture arrives in Phase 2.)",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Switch(checked = enabled, onCheckedChange = onToggle)
         }
     }
 }
