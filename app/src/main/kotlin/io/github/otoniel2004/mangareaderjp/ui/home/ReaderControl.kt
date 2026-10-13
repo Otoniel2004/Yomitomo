@@ -4,8 +4,6 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.projection.MediaProjectionConfig
-import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -35,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import io.github.otoniel2004.mangareaderjp.reader.ReaderStatus
+import io.github.otoniel2004.mangareaderjp.reader.ScreenCapture
 import io.github.otoniel2004.mangareaderjp.reader.ScreenReaderService
 
 /**
@@ -48,7 +47,6 @@ import io.github.otoniel2004.mangareaderjp.reader.ScreenReaderService
 @Composable
 fun ReaderControl(reader: ReaderStatus.State) {
     val context = LocalContext.current
-    val projectionManager = remember { context.getSystemService(MediaProjectionManager::class.java) }
     var showOverlayDialog by remember { mutableStateOf(false) }
 
     val captureLauncher = rememberLauncherForActivityResult(
@@ -60,15 +58,7 @@ fun ReaderControl(reader: ReaderStatus.State) {
         }
     }
 
-    fun requestCapture() {
-        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // Android 14+: ask for the entire screen, not a single app.
-            projectionManager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
-        } else {
-            projectionManager.createScreenCaptureIntent()
-        }
-        captureLauncher.launch(intent)
-    }
+    fun requestCapture() = captureLauncher.launch(ScreenCapture.consentIntent(context))
 
     val notificationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),

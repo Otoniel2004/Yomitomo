@@ -239,7 +239,11 @@ Each phase ends with something **testable on the phone**.
   or "Share entire screen". Choose **entire screen**.
 - **Apps that block capture** (FLAG_SECURE): the capture comes out black. The app
   will detect it (all-black frame) and warn you.
-- **120 Hz display**: irrelevant for capture; we sample ~2.5 frames/s and only
+- **Screen off ends capture (Android 15+)**: the system stops screen sharing when the
+  screen turns off, and a new capture always needs consent. The reader keeps the screen
+  awake while on ("Keep screen on" option) and, if capture still ends, shows a
+  "Reader paused — tap to resume" notification.
+- **120 Hz display**: irrelevant for capture; we sample ~4 frames/s and only
   process when the page changes.
 
 ---

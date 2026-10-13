@@ -23,9 +23,17 @@ import android.widget.TextView
  *   red   = capture blocked by the app on screen
  *
  * It never takes touches (FLAG_NOT_TOUCHABLE), so it can't get in the way of the reader.
+ *
+ * The same tiny window also keeps the screen awake while reading (FLAG_KEEP_SCREEN_ON):
+ * Android ends screen capture when the screen turns off, so letting it time out would stop the reader.
+ * With showDot = false the window stays (for keep-screen-on) but draws nothing.
  * Every method can be called from any thread; work is posted to the main thread.
  */
-class StatusOverlay(context: Context) {
+class StatusOverlay(
+    context: Context,
+    private val showDot: Boolean,
+    private val keepScreenOn: Boolean,
+) {
     sealed interface State {
         data object Waiting : State
         data object Working : State
@@ -55,7 +63,8 @@ class StatusOverlay(context: Context) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                (if (keepScreenOn) WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON else 0),
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.END
@@ -89,6 +98,11 @@ class StatusOverlay(context: Context) {
 
     private fun render(label: String?) {
         val textView = view ?: return
+        if (!showDot) {
+            textView.text = " "
+            textView.background = null
+            return
+        }
         val text = if (label == null) "●" else "●  $label"
         textView.text = SpannableString(text).apply {
             setSpan(ForegroundColorSpan(dotColor), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)

@@ -30,6 +30,7 @@ import androidx.core.content.IntentCompat
 import io.github.otoniel2004.mangareaderjp.MainActivity
 import io.github.otoniel2004.mangareaderjp.MangaReaderApp
 import io.github.otoniel2004.mangareaderjp.R
+import io.github.otoniel2004.mangareaderjp.data.ReaderSettings
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
@@ -55,6 +56,7 @@ class ScreenReaderService : Service() {
 
         private const val CHANNEL_ID = "reader"
         private const val NOTIFICATION_ID = 1
+        private const val RESUME_NOTIFICATION_ID = 2
         private const val CAPTURE_WIDTH = 360
         private const val POLL_MILLIS = 250L
 
@@ -80,6 +82,9 @@ class ScreenReaderService : Service() {
     private var imageReader: ImageReader? = null
     private var overlay: StatusOverlay? = null
 
+    @Volatile private var stopRequested = false // the user turned the reader off in our app
+    @Volatile private var shuttingDown = false
+
     private val detector = PageChangeDetector()
     private var lastSignature: IntArray? = null
     private var pages = 0
@@ -88,6 +93,10 @@ class ScreenReaderService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_STOP -> {
+                stopRequested = true
+                stopSelf()
+            }
             ACTION_START -> {
                 val code = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
                 val data = IntentCompat.getParcelableExtra(intent, EXTRA_RESULT_DATA, Intent::class.java)
@@ -103,7 +112,7 @@ class ScreenReaderService : Service() {
                     startCapture(code, data)
                 }
             }
-            else -> stopSelf() // ACTION_STOP, or a restart without consent data
+            else -> stopSelf() // a restart without consent data
         }
         return START_NOT_STICKY
     }
@@ -123,10 +132,16 @@ class ScreenReaderService : Service() {
         worker = handler
 
         // Android 14+: the callback must be registered before creating the virtual display.
-        // onStop fires when the user ends sharing from the status bar or the system revokes it.
+        // onStop fires when the system ends sharing: the screen turned off (Android 15+),
+        // the user tapped "stop sharing" in the status bar, or the permission was revoked.
+        // Capture can't be restarted without new consent, so we offer a one-tap resume.
         mediaProjection.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() {
-                main.post { stopSelf() }
+                if (stopRequested || shuttingDown) return
+                main.post {
+                    showResumeNotification()
+                    stopSelf()
+                }
             }
         }, handler)
 
@@ -138,12 +153,14 @@ class ScreenReaderService : Service() {
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.surface, null, handler,
         )
 
-        if (Settings.canDrawOverlays(this) && statusDotEnabled()) {
-            overlay = StatusOverlay(this).also {
+        val settings = readerSettings()
+        if (Settings.canDrawOverlays(this) && (settings.showStatusDot || settings.keepScreenOn)) {
+            overlay = StatusOverlay(this, settings.showStatusDot, settings.keepScreenOn).also {
                 it.show()
                 it.setState(StatusOverlay.State.Waiting)
             }
         }
+        getSystemService(NotificationManager::class.java).cancel(RESUME_NOTIFICATION_ID)
         ReaderStatus.update { ReaderStatus.State(running = true) }
         handler.post(poll)
     }
@@ -178,6 +195,7 @@ class ScreenReaderService : Service() {
     }
 
     override fun onDestroy() {
+        shuttingDown = true
         overlay?.hide()
         overlay = null
         val handler = worker
@@ -215,8 +233,24 @@ class ScreenReaderService : Service() {
         return Triple((realWidth * scale).roundToInt(), (realHeight * scale).roundToInt(), dpi)
     }
 
-    private fun statusDotEnabled(): Boolean = runBlocking {
-        (application as MangaReaderApp).container.settings.readerSettings.first().showStatusDot
+    private fun readerSettings(): ReaderSettings = runBlocking {
+        (application as MangaReaderApp).container.settings.readerSettings.first()
+    }
+
+    private fun showResumeNotification() {
+        val resume = PendingIntent.getActivity(
+            this, 2,
+            Intent(this, ResumeReaderActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Reader paused")
+            .setContentText("Screen sharing ended (e.g. the screen turned off). Tap to resume.")
+            .setContentIntent(resume)
+            .setAutoCancel(true)
+            .build()
+        getSystemService(NotificationManager::class.java).notify(RESUME_NOTIFICATION_ID, notification)
     }
 
     private fun createChannel() {

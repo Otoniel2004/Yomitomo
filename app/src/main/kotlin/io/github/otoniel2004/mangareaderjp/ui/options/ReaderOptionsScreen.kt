@@ -45,6 +45,10 @@ class ReaderOptionsViewModel(private val settings: SettingsRepository) : ViewMod
     fun setShowStatusDot(value: Boolean) {
         viewModelScope.launch { settings.setShowStatusDot(value) }
     }
+
+    fun setKeepScreenOn(value: Boolean) {
+        viewModelScope.launch { settings.setKeepScreenOn(value) }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,8 +84,16 @@ fun ReaderOptionsScreen(onBack: () -> Unit) {
                 onChange = viewModel::setShowStatusDot,
             )
             HorizontalDivider()
+            OptionRow(
+                title = "Keep screen on",
+                description = "Android stops screen capture when the screen turns off, which would pause " +
+                    "the reader. This keeps the screen awake while the reader is on.",
+                checked = state.keepScreenOn,
+                onChange = viewModel::setKeepScreenOn,
+            )
+            HorizontalDivider()
             Text(
-                "The status dot applies the next time you turn the reader on. On-page furigana arrives in Phase 4.",
+                "Changes apply the next time you turn the reader on. On-page furigana arrives in Phase 4.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(16.dp),
             )

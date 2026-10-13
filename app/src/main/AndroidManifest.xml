@@ -27,6 +27,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Invisible: re-asks for screen sharing from the "Reader paused" notification. -->
+        <activity
+            android:name=".reader.ResumeReaderActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <service
             android:name=".reader.ScreenReaderService"
             android:exported="false"
