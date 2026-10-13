@@ -17,6 +17,7 @@ with spaced repetition, Anki-style.
 | 3 | Japanese OCR (ML Kit, on-device) | ✅ |
 | 4 | On-page furigana + dictionary + 1 tap | ⏳ |
 | 5 | Bubble translation (DeepL) + 2 taps | — |
+| + | Manual cards: type romaji/Japanese or scan a photo, with kanji suggestions | ✅ |
 
 ## Building
 
@@ -38,6 +39,19 @@ cloning:
 ```bash
 git config core.hooksPath .githooks
 ```
+
+## Building the dictionary
+
+The app bundles JMdict as a SQLite database. It is generated, not committed:
+`:tools:dictbuilder:buildDictionary` downloads JMdict and builds
+`app/src/main/assets/dictionary/jmdict.db`. It runs automatically before the first app build.
+
+## Third-party data and libraries
+
+- **JMdict** — Electronic Dictionary Research and Development Group, used under
+  [CC BY-SA 4.0](https://www.edrdg.org/edrdg/licence.html). https://www.edrdg.org/jmdict/j_jmdict.html
+- **Kuromoji** (Apache 2.0) with the **IPADIC** dictionary — Japanese tokenizer.
+- **Google ML Kit** text recognition (Japanese) — on-device OCR.
 
 ## License
 

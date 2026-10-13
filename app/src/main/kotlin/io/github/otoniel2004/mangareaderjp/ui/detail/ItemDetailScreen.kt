@@ -44,6 +44,7 @@ import io.github.otoniel2004.mangareaderjp.japanese.Romaji
 import io.github.otoniel2004.mangareaderjp.srs.Rating
 import io.github.otoniel2004.mangareaderjp.srs.Srs
 import io.github.otoniel2004.mangareaderjp.ui.appViewModel
+import io.github.otoniel2004.mangareaderjp.ui.components.CardImage
 import io.github.otoniel2004.mangareaderjp.ui.components.Flashcard
 import io.github.otoniel2004.mangareaderjp.ui.components.FuriganaText
 import io.github.otoniel2004.mangareaderjp.ui.components.RomajiLine
@@ -118,6 +119,8 @@ fun ItemDetailScreen(id: Long, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             HeaderCard(current, viewModel::setShowFurigana)
+
+            current.imagePath?.let { path -> Section("Image") { CardImage(path) } }
 
             if (current.type == ItemType.SENTENCE) {
                 Section("Sentence breakdown") { SentenceBreakdown(current.segments, current.showFurigana) }

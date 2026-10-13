@@ -197,6 +197,12 @@ Each phase ends with something **testable on the phone**.
 - Noise filter
 - ✅ Test: see boxes over the bubbles
 
+### Extra: manual cards ✅
+- Type romaji (or Japanese) → kana → kanji suggestions from JMdict, with conjugated
+  forms (deinflection), particles and katakana for CAPITALS; tap a word to pick another spelling
+- Scan with the camera or pick an image → OCR → tap the text blocks → same card editor, with a crop
+- Bundled JMdict (SQLite, built by `:tools:dictbuilder`) and Kuromoji tokenizer — shared with Phase 4
+
 ### Phase 4: Furigana + dictionary + 1 tap
 - Kuromoji (tokenization + readings) + reading overrides
 - Bundled JMdict (SQLite) + deinflection

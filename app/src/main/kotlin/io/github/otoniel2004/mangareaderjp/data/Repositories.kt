@@ -1,6 +1,7 @@
 package io.github.otoniel2004.mangareaderjp.data
 
 import android.content.Context
+import java.io.File
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -11,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-class SavedItemRepository(private val dao: SavedItemDao) {
+class SavedItemRepository(private val dao: SavedItemDao, private val context: Context) {
     fun observeAll(): Flow<List<SavedItem>> = dao.observeAll()
 
     fun observe(id: Long): Flow<SavedItem?> = dao.observe(id)
@@ -19,6 +20,8 @@ class SavedItemRepository(private val dao: SavedItemDao) {
     suspend fun dueItems(now: Long): List<SavedItem> = dao.due(now)
 
     suspend fun insertAll(items: List<SavedItem>) = dao.insertAll(items)
+
+    suspend fun insert(item: SavedItem): Long = dao.insert(item)
 
     suspend fun setShowFurigana(id: Long, show: Boolean) = dao.setShowFurigana(id, show)
 
@@ -28,7 +31,15 @@ class SavedItemRepository(private val dao: SavedItemDao) {
         return updated
     }
 
-    suspend fun delete(id: Long) = dao.delete(id)
+    /** Deletes the card and its bubble/photo crop, if it has one. */
+    suspend fun delete(id: Long) {
+        val imagePath = dao.get(id)?.imagePath
+        dao.delete(id)
+        imagePath?.let { File(it).delete() }
+    }
+
+    /** Folder for card images (crops from the camera or the reader). */
+    fun imagesDir(): File = File(context.filesDir, "card-images").apply { mkdirs() }
 }
 
 /** Reader preferences (what is drawn on top of the manga). */

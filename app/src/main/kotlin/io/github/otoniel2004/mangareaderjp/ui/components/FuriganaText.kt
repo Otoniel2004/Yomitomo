@@ -1,17 +1,17 @@
 package io.github.otoniel2004.mangareaderjp.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,7 +46,7 @@ fun FuriganaText(
             val isParticle = highlightParticles && segment.pos == PartOfSpeech.PARTICLE
             val color = if (isParticle) particleColor else baseColor
             for (part in rubyParts(segment.surface, segment.reading)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                RubyColumn(overhang = fontSize) {
                     if (showFurigana) {
                         Text(
                             text = part.ruby ?: "",
@@ -65,6 +65,28 @@ fun FuriganaText(
                         fontWeight = if (isParticle) FontWeight.Bold else null,
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Reading on top, text below, both centered. Like real Japanese typesetting, a reading wider
+ * than its kanji may overhang the neighbors by up to half of [overhang] on each side, so
+ * 諦(あきら)めない doesn't get a gap between 諦 and め. Children: [ruby,] base.
+ */
+@Composable
+private fun RubyColumn(overhang: TextUnit, content: @Composable () -> Unit) {
+    Layout(content) { measurables, _ ->
+        val placeables = measurables.map { it.measure(Constraints()) }
+        val base = placeables.last()
+        val ruby = placeables.getOrNull(placeables.size - 2)
+        val width = maxOf(base.width, (ruby?.width ?: 0) - overhang.roundToPx())
+        layout(width, placeables.sumOf { it.height }) {
+            var y = 0
+            for (placeable in placeables) {
+                placeable.place((width - placeable.width) / 2, y)
+                y += placeable.height
             }
         }
     }

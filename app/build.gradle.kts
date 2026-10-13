@@ -35,6 +35,13 @@ android {
     buildFeatures {
         compose = true
     }
+
+    packaging {
+        resources {
+            // Both Kuromoji jars ship the same docs; they're credited in the README instead.
+            excludes += setOf("META-INF/CONTRIBUTORS.md", "META-INF/LICENSE.md", "META-INF/NOTICE.md")
+        }
+    }
 }
 
 dependencies {
@@ -57,6 +64,12 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mlkit.text.japanese)
+    implementation(libs.kuromoji.ipadic)
 
     testImplementation(libs.junit)
+}
+
+// The bundled dictionary is generated (not versioned): build it before the app when missing.
+tasks.named("preBuild") {
+    dependsOn(":tools:dictbuilder:buildDictionary")
 }

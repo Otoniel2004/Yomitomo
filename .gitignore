@@ -31,3 +31,6 @@ deepl*.txt
 # ── OS ───────────────────────────────────────
 .DS_Store
 Thumbs.db
+
+# ── Generated dictionary (built by :tools:dictbuilder) ──
+app/src/main/assets/dictionary/

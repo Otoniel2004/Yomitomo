@@ -21,6 +21,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -41,6 +48,8 @@ fun HomeScreen(
     onOpenItem: (Long) -> Unit,
     onReview: () -> Unit,
     onOpenOptions: () -> Unit,
+    onAddTyped: () -> Unit,
+    onScan: (fromCamera: Boolean) -> Unit,
 ) {
     val viewModel = appViewModel { HomeViewModel(it.items) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -56,6 +65,7 @@ fun HomeScreen(
                 },
             )
         },
+        floatingActionButton = { AddButton(onAddTyped, onScan) },
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
@@ -135,4 +145,22 @@ fun ItemType.label(): String = when (this) {
     ItemType.WORD -> "Word"
     ItemType.EXPRESSION -> "Expression"
     ItemType.SENTENCE -> "Sentence"
+}
+
+/** "+ Add" button: type a card yourself, or read one from a photo. */
+@Composable
+private fun AddButton(onAddTyped: () -> Unit, onScan: (fromCamera: Boolean) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        ExtendedFloatingActionButton(
+            onClick = { expanded = true },
+            icon = { Text("+", style = MaterialTheme.typography.titleLarge) },
+            text = { Text("Add") },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(text = { Text("Type (romaji or Japanese)") }, onClick = { expanded = false; onAddTyped() })
+            DropdownMenuItem(text = { Text("Scan with camera") }, onClick = { expanded = false; onScan(true) })
+            DropdownMenuItem(text = { Text("Read an image from the gallery") }, onClick = { expanded = false; onScan(false) })
+        }
+    }
 }

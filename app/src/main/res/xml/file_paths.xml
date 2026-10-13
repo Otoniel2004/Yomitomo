@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Folders the camera app may write into, through a temporary content:// link. -->
+<paths>
+    <cache-path name="scans" path="scans/" />
+</paths>

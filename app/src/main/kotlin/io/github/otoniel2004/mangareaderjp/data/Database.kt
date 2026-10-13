@@ -24,6 +24,9 @@ interface SavedItemDao {
     @Query("SELECT * FROM saved_items WHERE id = :id")
     fun observe(id: Long): Flow<SavedItem?>
 
+    @Query("SELECT * FROM saved_items WHERE id = :id")
+    suspend fun get(id: Long): SavedItem?
+
     @Query("SELECT * FROM saved_items WHERE dueAt <= :now ORDER BY dueAt")
     suspend fun due(now: Long): List<SavedItem>
 
