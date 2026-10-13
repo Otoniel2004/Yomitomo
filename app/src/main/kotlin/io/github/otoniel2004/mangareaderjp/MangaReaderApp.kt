@@ -33,6 +33,7 @@ class MangaReaderApp : Application() {
  * and hands them to the screens. (Manual dependency injection, no library.)
  */
 class AppContainer(context: Context) {
+    val context: Context = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val database = AppDatabase.build(context)

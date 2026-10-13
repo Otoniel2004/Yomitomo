@@ -192,7 +192,7 @@ Each phase ends with something **testable on the phone**.
 - Debug overlay showing "page changed"
 - ✅ Test: enable, open the manga reader, turn pages and see the notice
 
-### Phase 3: OCR (ML Kit Japanese) ✅ (code ready, testing on device)
+### Phase 3: OCR (ML Kit Japanese) ✅
 - OCR on frames, boxes drawn on the overlay (debug mode)
 - Noise filter
 - ✅ Test: see boxes over the bubbles
@@ -203,7 +203,7 @@ Each phase ends with something **testable on the phone**.
 - Scan with the camera or pick an image → OCR → tap the text blocks → same card editor, with a crop
 - Bundled JMdict (SQLite, built by `:tools:dictbuilder`) and Kuromoji tokenizer — shared with Phase 4
 
-### Phase 4: Furigana + dictionary + 1 tap
+### Phase 4: Furigana + dictionary + 1 tap ✅ (code ready, testing on device)
 - Kuromoji (tokenization + readings) + reading overrides
 - Bundled JMdict (SQLite) + deinflection
 - Furigana drawn over kanji/katakana

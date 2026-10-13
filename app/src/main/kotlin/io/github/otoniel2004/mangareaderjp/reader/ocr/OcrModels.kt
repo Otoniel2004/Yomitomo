@@ -25,8 +25,17 @@ data class Box(val left: Int, val top: Int, val right: Int, val bottom: Int) {
     )
 }
 
-/** One line (or, for vertical text, one column) recognized by the OCR. */
-data class OcrLine(val text: String, val box: Box)
+/** One recognized character (ML Kit "symbol") and where it is. */
+data class OcrChar(val text: String, val box: Box)
 
-/** A group of lines the OCR considers one paragraph — in manga, usually one speech bubble. */
-data class OcrBlock(val text: String, val box: Box, val lines: List<OcrLine>)
+/**
+ * One line (or, for vertical text, one column) recognized by the OCR.
+ * [chars] are the line's characters with their boxes; when present, [text] is exactly their concatenation.
+ */
+data class OcrLine(val text: String, val box: Box, val chars: List<OcrChar> = emptyList())
+
+/**
+ * A group of lines the OCR considers one paragraph — in manga, usually one speech bubble.
+ * [printedFurigana]: the page already had furigana here (we removed it), so we don't draw ours.
+ */
+data class OcrBlock(val text: String, val box: Box, val lines: List<OcrLine>, val printedFurigana: Boolean = false)

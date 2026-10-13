@@ -13,6 +13,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.otoniel2004.mangareaderjp.AppContainer
 import io.github.otoniel2004.mangareaderjp.reader.ocr.Box
 import io.github.otoniel2004.mangareaderjp.reader.ocr.JapaneseOcr
+import io.github.otoniel2004.mangareaderjp.reader.ocr.OcrDebug
 import io.github.otoniel2004.mangareaderjp.reader.ocr.OcrBlock
 import io.github.otoniel2004.mangareaderjp.reader.ocr.OcrFilter
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +54,10 @@ class ScanViewModel(private val container: AppContainer) : ViewModel() {
             try {
                 val bitmap = withContext(Dispatchers.IO) { decodeUpright(resolver, uri) }
                 val engine = ocr ?: JapaneseOcr().also { ocr = it }
-                val blocks = withContext(Dispatchers.Default) { OcrFilter.clean(engine.recognize(bitmap)) }
+                val blocks = withContext(Dispatchers.Default) {
+                    val raw = engine.recognize(bitmap)
+                    OcrFilter.clean(raw).also { OcrDebug.record(container.context, "image", bitmap, raw, it) }
+                }
                 state.value = ScanUiState(
                     bitmap = bitmap,
                     blocks = blocks,

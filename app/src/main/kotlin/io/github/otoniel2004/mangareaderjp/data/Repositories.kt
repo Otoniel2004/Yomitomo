@@ -47,7 +47,7 @@ data class ReaderSettings(
     val showFuriganaOnPage: Boolean = true,
     val showStatusDot: Boolean = true,
     val keepScreenOn: Boolean = true,
-    val showOcrBoxes: Boolean = true,
+    val showOcrBoxes: Boolean = false,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -70,7 +70,7 @@ class SettingsRepository(private val context: Context) {
             showFuriganaOnPage = prefs[Keys.FURIGANA_ON_PAGE] ?: true,
             showStatusDot = prefs[Keys.STATUS_DOT] ?: true,
             keepScreenOn = prefs[Keys.KEEP_SCREEN_ON] ?: true,
-            showOcrBoxes = prefs[Keys.OCR_BOXES] ?: true,
+            showOcrBoxes = prefs[Keys.OCR_BOXES] ?: false,
         )
     }
 

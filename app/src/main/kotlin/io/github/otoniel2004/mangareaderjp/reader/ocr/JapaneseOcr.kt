@@ -20,7 +20,13 @@ class JapaneseOcr : Closeable {
         return result.textBlocks.mapNotNull { block ->
             val box = block.boundingBox?.toBox() ?: return@mapNotNull null
             val lines = block.lines.mapNotNull { line ->
-                line.boundingBox?.let { OcrLine(line.text, it.toBox()) }
+                val lineBox = line.boundingBox?.toBox() ?: return@mapNotNull null
+                // Per-character boxes: where furigana goes and which word a tap hits.
+                val chars = line.elements.flatMap { element ->
+                    element.symbols.mapNotNull { symbol -> symbol.boundingBox?.let { OcrChar(symbol.text, it.toBox()) } }
+                }
+                if (chars.isEmpty()) OcrLine(line.text, lineBox)
+                else OcrLine(chars.joinToString("") { it.text }, lineBox, chars)
             }
             OcrBlock(block.text, box, lines)
         }

@@ -51,6 +51,14 @@ class PageChangeDetector(
         return Event.SAME_PAGE
     }
 
+    /**
+     * Forget the last frame (e.g. after our own popup covered the screen). The next frames
+     * settle again and are compared with the remembered page, giving SAME_PAGE if nothing changed.
+     */
+    fun forgetPrevious() {
+        previous = null
+    }
+
     companion object {
         fun difference(a: IntArray, b: IntArray, ignored: BooleanArray? = null): Double {
             require(a.size == b.size) { "Signatures must have the same size" }

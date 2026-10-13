@@ -35,7 +35,26 @@ import io.github.otoniel2004.mangareaderjp.MangaReaderApp
 import io.github.otoniel2004.mangareaderjp.R
 import io.github.otoniel2004.mangareaderjp.data.ReaderSettings
 import io.github.otoniel2004.mangareaderjp.reader.ocr.JapaneseOcr
-import io.github.otoniel2004.mangareaderjp.reader.ocr.OcrBlock
+import io.github.otoniel2004.mangareaderjp.reader.ocr.OcrDebug
+import io.github.otoniel2004.mangareaderjp.data.ItemType
+import io.github.otoniel2004.mangareaderjp.data.SavedItem
+import io.github.otoniel2004.mangareaderjp.reader.ocr.Box
+import io.github.otoniel2004.mangareaderjp.reader.overlay.PageOverlay
+import io.github.otoniel2004.mangareaderjp.reader.overlay.PopupOverlay
+import io.github.otoniel2004.mangareaderjp.reader.overlay.SentencePopup
+import io.github.otoniel2004.mangareaderjp.reader.overlay.TouchTargets
+import io.github.otoniel2004.mangareaderjp.reader.overlay.WordPopup
+import io.github.otoniel2004.mangareaderjp.reader.page.AnalyzedBlock
+import io.github.otoniel2004.mangareaderjp.reader.page.PageAnalyzer
+import io.github.otoniel2004.mangareaderjp.reader.page.PageWord
+import io.github.otoniel2004.mangareaderjp.srs.Srs
+import android.widget.Toast
+import androidx.compose.runtime.Composable
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import java.io.File
 import io.github.otoniel2004.mangareaderjp.reader.ocr.OcrFilter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -74,6 +93,8 @@ class ScreenReaderService : Service() {
         private const val MAX_CAPTURE_WIDTH = 1080 // OCR needs real resolution
         private const val POLL_MILLIS = 250L
         private const val MASK_MARGIN = 8
+        private const val TOUCH_MARGIN = 8
+        private const val CROP_MARGIN = 16
 
         fun start(context: Context, resultCode: Int, data: Intent) {
             val intent = Intent(context, ScreenReaderService::class.java)
@@ -98,18 +119,28 @@ class ScreenReaderService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
     private var statusOverlay: StatusOverlay? = null
-    private var boxesOverlay: OcrBoxesOverlay? = null
+    private var pageOverlay: PageOverlay? = null
+    private var touchTargets: TouchTargets? = null
+    private var popup: PopupOverlay? = null
     private var settings = ReaderSettings()
+    private val container get() = (application as MangaReaderApp).container
+    private val pageAnalyzer by lazy { PageAnalyzer(container.analyzer, container.dictionary) }
+    private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Volatile private var stopRequested = false // the user turned the reader off in our app
     @Volatile private var shuttingDown = false
+
+    /** The analyzed page on screen; read by the touch handlers on the main thread. */
+    @Volatile private var currentPage: PageState? = null
+
+    private class PageState(val blocks: List<AnalyzedBlock>, val bitmap: Bitmap)
 
     // ── Worker-thread state ──────────────────────────────
     private val detector = PageChangeDetector()
     private var heldImage: Image? = null          // newest frame, kept open so OCR can use it
     private var lastSignature: IntArray? = null
     private var ignoredCells: BooleanArray? = null // where our drawings are, hidden from the detector
-    private var currentBlocks: List<OcrBlock>? = null // OCR result of the page on screen
+    private var paused = false                    // a popup is open: our own window is on screen
     private var generation = 0
     private var pages = 0
     private var captureWidth = 0
@@ -186,7 +217,9 @@ class ScreenReaderService : Service() {
         )
 
         if (Settings.canDrawOverlays(this)) {
-            if (settings.showOcrBoxes) boxesOverlay = OcrBoxesOverlay(this).also { it.show() }
+            pageOverlay = PageOverlay(this).also { it.show() }
+            touchTargets = TouchTargets(this, tapListener)
+            popup = PopupOverlay(this) { worker?.post(::resumeAfterPopup) }
             if (settings.showStatusDot || settings.keepScreenOn) {
                 statusOverlay = StatusOverlay(this, settings.showStatusDot, settings.keepScreenOn).also {
                     it.show()
@@ -209,7 +242,9 @@ class ScreenReaderService : Service() {
                 heldImage = image
                 lastSignature = FrameSampler.signature(image)
             }
-            lastSignature?.let { onEvent(detector.onFrame(it, SystemClock.uptimeMillis(), ignoredCells), it) }
+            if (!paused) {
+                lastSignature?.let { onEvent(detector.onFrame(it, SystemClock.uptimeMillis(), ignoredCells), it) }
+            }
             worker?.postDelayed(this, POLL_MILLIS)
         }
     }
@@ -223,7 +258,7 @@ class ScreenReaderService : Service() {
             }
             PageChangeDetector.Event.NEW_PAGE -> {
                 generation++
-                currentBlocks = null
+                currentPage = null
                 if (PageChangeDetector.looksBlack(signature)) {
                     ReaderStatus.update { it.copy(captureBlocked = true) }
                     statusOverlay?.setState(StatusOverlay.State.Blocked)
@@ -234,9 +269,9 @@ class ScreenReaderService : Service() {
                 }
             }
             PageChangeDetector.Event.SAME_PAGE -> {
-                val blocks = currentBlocks
-                if (blocks == null) runOcr() else {
-                    showDrawings(blocks)
+                val page = currentPage
+                if (page == null) runOcr() else {
+                    showDrawings(page)
                     statusOverlay?.setState(StatusOverlay.State.Ready)
                 }
             }
@@ -252,23 +287,26 @@ class ScreenReaderService : Service() {
         statusOverlay?.setState(StatusOverlay.State.Working)
         ocrExecutor.execute {
             val started = SystemClock.uptimeMillis()
+            // OCR, then everything a tap needs (words, dictionary entries, furigana positions),
+            // computed now so that taps answer instantly.
             val blocks = try {
-                OcrFilter.clean(engine.recognize(bitmap))
+                val raw = engine.recognize(bitmap)
+                val cleaned = OcrFilter.clean(raw).also { OcrDebug.record(this, "screen", bitmap, raw, it) }
+                pageAnalyzer.analyze(cleaned)
             } catch (e: Exception) {
                 Log.w(TAG, "OCR failed", e)
                 emptyList()
-            } finally {
-                bitmap.recycle()
             }
             val elapsed = SystemClock.uptimeMillis() - started
             worker?.post {
                 if (requested != generation) return@post // the page changed meanwhile
-                currentBlocks = blocks
-                showDrawings(blocks)
+                val page = PageState(blocks, bitmap) // the bitmap stays for cropping saved cards
+                currentPage = page
+                showDrawings(page)
                 ReaderStatus.update {
                     it.copy(
                         pagesDetected = pages, captureBlocked = false,
-                        lastPageText = blocks.map(OcrBlock::text), lastOcrMillis = elapsed,
+                        lastPageText = blocks.map { b -> b.block.text }, lastOcrMillis = elapsed,
                     )
                 }
                 statusOverlay?.setState(StatusOverlay.State.NewPage(pages, blocks.size))
@@ -277,25 +315,121 @@ class ScreenReaderService : Service() {
         }
     }
 
-    /** Draw the OCR boxes. The mask is set first, so the detector never sees our own boxes appear. */
-    private fun showDrawings(blocks: List<OcrBlock>) {
-        val overlay = boxesOverlay ?: return
-        val boxes = blocks.map { it.box }
-        ignoredCells = FrameSampler.cellMask(boxes, captureWidth, captureHeight, MASK_MARGIN)
-        overlay.setBoxes(boxes.map { it.scaled(captureToScreen) })
+    /**
+     * Furigana, debug boxes and tap targets for the page. The detector mask is set first,
+     * so it never sees our own drawings appear and mistake them for a page change.
+     */
+    private fun showDrawings(page: PageState) {
+        val rubies = if (settings.showFuriganaOnPage) page.blocks.flatMap { it.rubies } else emptyList()
+        val blockBoxes = page.blocks.map { it.block.box }
+        ignoredCells = FrameSampler.cellMask(blockBoxes + rubies.map { it.box }, captureWidth, captureHeight, MASK_MARGIN)
+        pageOverlay?.setContent(
+            rubies.map { it.copy(box = it.box.scaled(captureToScreen)) },
+            if (settings.showOcrBoxes) blockBoxes.map { it.scaled(captureToScreen) } else emptyList(),
+        )
+        touchTargets?.setTargets(blockBoxes.map { it.expandedBy(TOUCH_MARGIN).scaled(captureToScreen) })
     }
 
     private fun clearDrawings() {
-        boxesOverlay?.setBoxes(emptyList())
+        pageOverlay?.clear()
+        touchTargets?.clear()
         ignoredCells = null
     }
+
+    // ── Taps (main thread) ───────────────────────────────
+
+    private val tapListener = object : TouchTargets.Listener {
+        override fun onTap(block: Int, screenX: Int, screenY: Int) {
+            val analyzed = currentPage?.blocks?.getOrNull(block) ?: return
+            val word = analyzed.wordAt((screenX / captureToScreen).toInt(), (screenY / captureToScreen).toInt()) ?: return
+            showPopup { close ->
+                WordPopup(word, atTop = isLowerHalf(screenY), onSave = { saveWord(analyzed, word) }, onClose = close)
+            }
+        }
+
+        override fun onDoubleTap(block: Int, screenX: Int, screenY: Int) {
+            val analyzed = currentPage?.blocks?.getOrNull(block) ?: return
+            showPopup { close ->
+                SentencePopup(analyzed.segments, atTop = isLowerHalf(screenY), onSave = { saveSentence(analyzed) }, onClose = close)
+            }
+        }
+    }
+
+    private fun isLowerHalf(screenY: Int) = screenY > resources.displayMetrics.heightPixels / 2
+
+    /** Popups cover the screen: pause page detection until they close. */
+    private fun showPopup(content: @Composable (close: () -> Unit) -> Unit) {
+        val window = popup ?: return
+        worker?.post { paused = true }
+        window.show(content)
+    }
+
+    private fun resumeAfterPopup() {
+        paused = false
+        detector.forgetPrevious()
+    }
+
+    private fun saveWord(analyzed: AnalyzedBlock, word: PageWord) = save(
+        SavedItem(
+            type = word.type,
+            text = word.text,
+            segments = word.segments,
+            meanings = word.entry?.meanings().orEmpty(),
+            contextSegments = analyzed.segments,
+            source = "Reader",
+            createdAt = System.currentTimeMillis(),
+            srs = Srs.newCard(System.currentTimeMillis()),
+        ),
+        analyzed,
+    )
+
+    private fun saveSentence(analyzed: AnalyzedBlock) = save(
+        SavedItem(
+            type = ItemType.SENTENCE,
+            text = analyzed.block.text,
+            segments = analyzed.segments,
+            source = "Reader",
+            createdAt = System.currentTimeMillis(),
+            srs = Srs.newCard(System.currentTimeMillis()),
+        ),
+        analyzed,
+    )
+
+    /** Saves silently (the user stays in the manga) with a crop of the bubble. */
+    private fun save(item: SavedItem, analyzed: AnalyzedBlock) {
+        val bitmap = currentPage?.bitmap
+        saveScope.launch {
+            val imagePath = bitmap?.let { cropBlock(it, analyzed.block.box) }
+            container.items.insert(item.copy(imagePath = imagePath))
+            main.post { Toast.makeText(this@ScreenReaderService, "Saved ✓", Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    private fun cropBlock(bitmap: Bitmap, box: Box): String? = runCatching {
+        val area = box.expandedBy(CROP_MARGIN)
+        val left = area.left.coerceIn(0, bitmap.width - 1)
+        val top = area.top.coerceIn(0, bitmap.height - 1)
+        val crop = Bitmap.createBitmap(
+            bitmap, left, top,
+            area.right.coerceIn(left + 1, bitmap.width) - left,
+            area.bottom.coerceIn(top + 1, bitmap.height) - top,
+        )
+        val file = File(container.items.imagesDir(), "reader-${System.currentTimeMillis()}.jpg")
+        file.outputStream().use { crop.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+        file.path
+    }.getOrNull()
 
     override fun onDestroy() {
         shuttingDown = true
         statusOverlay?.hide()
-        boxesOverlay?.hide()
+        pageOverlay?.hide()
+        touchTargets?.clear()
+        popup?.close()
         statusOverlay = null
-        boxesOverlay = null
+        pageOverlay = null
+        touchTargets = null
+        popup = null
+        currentPage = null
         val handler = worker
         val thread = workerThread
         if (handler != null && thread != null) {

@@ -20,7 +20,7 @@ object OcrFilter {
 
     private fun cleanBlock(block: OcrBlock): OcrBlock? {
         val japaneseLines = block.lines
-            .map { it.copy(text = it.text.filterNot(Char::isWhitespace)) }
+            .map(::withoutWhitespace)
             .filter { isMostlyJapanese(it.text) }
         if (japaneseLines.isEmpty()) return null
 
@@ -32,7 +32,15 @@ object OcrFilter {
             text = ordered.joinToString("") { it.text },
             box = ordered.map { it.box }.reduce(Box::union),
             lines = ordered,
+            printedFurigana = lines.size < japaneseLines.size,
         )
+    }
+
+    /** Removes spaces, keeping the per-character boxes aligned with the text. */
+    private fun withoutWhitespace(line: OcrLine): OcrLine {
+        if (line.chars.isEmpty()) return line.copy(text = line.text.filterNot(Char::isWhitespace))
+        val chars = line.chars.filterNot { it.text.isBlank() }
+        return line.copy(text = chars.joinToString("") { it.text }, chars = chars)
     }
 
     fun isJapanese(c: Char) =

@@ -15,8 +15,8 @@ with spaced repetition, Anki-style.
 | 1 | Home, saved cards, furigana, romaji, study (SM-2) | ✅ |
 | 2 | Background screen capture (page change detection) | ✅ |
 | 3 | Japanese OCR (ML Kit, on-device) | ✅ |
-| 4 | On-page furigana + dictionary + 1 tap | ⏳ |
-| 5 | Bubble translation (DeepL) + 2 taps | — |
+| 4 | On-page furigana + 1 tap (word) / 2 taps (sentence) | ✅ |
+| 5 | Bubble translation (DeepL) | ⏳ |
 | + | Manual cards: type romaji/Japanese or scan a photo, with kanji suggestions | ✅ |
 
 ## Building

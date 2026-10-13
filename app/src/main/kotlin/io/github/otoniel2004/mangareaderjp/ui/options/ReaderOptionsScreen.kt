@@ -104,7 +104,7 @@ fun ReaderOptionsScreen(onBack: () -> Unit) {
             )
             HorizontalDivider()
             Text(
-                "Changes apply the next time you turn the reader on. On-page furigana arrives in Phase 4.",
+                "Changes apply the next time you turn the reader on.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(16.dp),
             )
