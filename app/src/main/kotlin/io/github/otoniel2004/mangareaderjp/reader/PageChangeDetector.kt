@@ -7,50 +7,61 @@ import kotlin.math.abs
  * (small grids of brightness values, see [FrameSampler]).
  *
  *   frame differs from the previous one?  ──► MOVING (page-turn animation, scrolling)
- *   screen still for [settleMillis]?
+ *   screen still for [settleMillis] after moving?
  *        └─ differs from the last page?  ──► NEW_PAGE
- *        └─ same page                    ──► NONE
+ *        └─ same page as before          ──► SAME_PAGE (e.g. a popup came and went)
+ *   otherwise                            ──► NONE
  *
  * Differences are the mean absolute brightness difference (0..255) between two signatures.
+ * Cells marked in `ignored` (where we draw our own overlays) don't count.
  */
 class PageChangeDetector(
     private val motionThreshold: Double = 3.0,
     private val pageThreshold: Double = 8.0,
     private val settleMillis: Long = 300,
 ) {
-    enum class Event { NONE, MOVING, NEW_PAGE }
+    enum class Event { NONE, MOVING, NEW_PAGE, SAME_PAGE }
 
     private var previous: IntArray? = null
     private var page: IntArray? = null
     private var lastMotionAt = 0L
+    private var movedSinceSettle = false
 
-    fun onFrame(signature: IntArray, now: Long): Event {
+    fun onFrame(signature: IntArray, now: Long, ignored: BooleanArray? = null): Event {
         val prev = previous
         previous = signature
         if (prev == null) {
             lastMotionAt = now
+            movedSinceSettle = true
             return Event.NONE
         }
-        if (difference(prev, signature) > motionThreshold) {
+        if (difference(prev, signature, ignored) > motionThreshold) {
             lastMotionAt = now
+            movedSinceSettle = true
             return Event.MOVING
         }
-        if (now - lastMotionAt < settleMillis) return Event.NONE
+        if (now - lastMotionAt < settleMillis || !movedSinceSettle) return Event.NONE
 
+        movedSinceSettle = false
         val current = page
-        if (current == null || difference(current, signature) > pageThreshold) {
+        if (current == null || difference(current, signature, ignored) > pageThreshold) {
             page = signature
             return Event.NEW_PAGE
         }
-        return Event.NONE
+        return Event.SAME_PAGE
     }
 
     companion object {
-        fun difference(a: IntArray, b: IntArray): Double {
+        fun difference(a: IntArray, b: IntArray, ignored: BooleanArray? = null): Double {
             require(a.size == b.size) { "Signatures must have the same size" }
             var total = 0L
-            for (i in a.indices) total += abs(a[i] - b[i])
-            return total.toDouble() / a.size
+            var counted = 0
+            for (i in a.indices) {
+                if (ignored != null && ignored[i]) continue
+                total += abs(a[i] - b[i])
+                counted++
+            }
+            return if (counted == 0) 0.0 else total.toDouble() / counted
         }
 
         /** An all-black frame usually means the app on screen blocks capture (FLAG_SECURE). */

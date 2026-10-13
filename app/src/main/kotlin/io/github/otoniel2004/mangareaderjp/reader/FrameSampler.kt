@@ -1,6 +1,7 @@
 package io.github.otoniel2004.mangareaderjp.reader
 
 import android.media.Image
+import io.github.otoniel2004.mangareaderjp.reader.ocr.Box
 
 /**
  * Turns a captured frame into a small brightness grid (the "signature").
@@ -19,16 +20,12 @@ object FrameSampler {
         val buffer = plane.buffer
         val rowStride = plane.rowStride
         val pixelStride = plane.pixelStride
-        val width = image.width
-        val height = image.height
-        val top = (height * IGNORED_TOP_FRACTION).toInt()
-        val usable = height - top
 
         val out = IntArray(COLUMNS * ROWS)
         for (row in 0 until ROWS) {
-            val y = top + (2 * row + 1) * usable / (2 * ROWS)
             for (col in 0 until COLUMNS) {
-                val x = (2 * col + 1) * width / (2 * COLUMNS)
+                val x = sampleX(col, image.width)
+                val y = sampleY(row, image.height)
                 val i = y * rowStride + x * pixelStride
                 val r = buffer.get(i).toInt() and 0xFF
                 val g = buffer.get(i + 1).toInt() and 0xFF
@@ -37,5 +34,25 @@ object FrameSampler {
             }
         }
         return out
+    }
+
+    /**
+     * Marks the grid cells that fall inside our own drawings (OCR boxes, furigana...),
+     * so the page detector ignores them: we don't want to detect our own overlay as a page change.
+     */
+    fun cellMask(boxes: List<Box>, width: Int, height: Int, margin: Int): BooleanArray {
+        val grown = boxes.map { it.expandedBy(margin) }
+        return BooleanArray(COLUMNS * ROWS) { cell ->
+            val x = sampleX(cell % COLUMNS, width)
+            val y = sampleY(cell / COLUMNS, height)
+            grown.any { it.contains(x, y) }
+        }
+    }
+
+    internal fun sampleX(col: Int, width: Int) = (2 * col + 1) * width / (2 * COLUMNS)
+
+    internal fun sampleY(row: Int, height: Int): Int {
+        val top = (height * IGNORED_TOP_FRACTION).toInt()
+        return top + (2 * row + 1) * (height - top) / (2 * ROWS)
     }
 }

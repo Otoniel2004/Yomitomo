@@ -9,12 +9,15 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -118,32 +121,56 @@ fun ReaderControl(reader: ReaderStatus.State) {
 
 @Composable
 private fun ReaderCard(reader: ReaderStatus.State, onToggle: (Boolean) -> Unit) {
+    var showText by remember { mutableStateOf(false) }
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = if (reader.running) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (reader.running) "Reader on" else "Reader off",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    when {
-                        !reader.running -> "Reads the screen looking for Japanese while you use another app."
-                        reader.captureBlocked -> "The app on screen blocks screen capture."
-                        else -> "Pages detected: ${reader.pagesDetected}. Open your manga app and turn pages."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                )
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (reader.running) "Reader on" else "Reader off",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        when {
+                            !reader.running -> "Reads the screen looking for Japanese while you use another app."
+                            reader.captureBlocked -> "The app on screen blocks screen capture."
+                            reader.pagesDetected == 0 -> "Open your manga app and turn pages."
+                            else -> "Page ${reader.pagesDetected} · ${reader.lastPageText.size} text blocks " +
+                                "· OCR ${reader.lastOcrMillis} ms"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Switch(checked = reader.running, onCheckedChange = onToggle)
             }
-            Spacer(Modifier.width(12.dp))
-            Switch(checked = reader.running, onCheckedChange = onToggle)
+            if (reader.running && reader.lastPageText.isNotEmpty()) {
+                TextButton(onClick = { showText = true }) { Text("View text from last page") }
+            }
         }
+    }
+
+    if (showText) {
+        AlertDialog(
+            onDismissRequest = { showText = false },
+            title = { Text("Text on the last page") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    reader.lastPageText.forEachIndexed { index, block ->
+                        Text("${index + 1}. $block", style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showText = false }) { Text("Close") } },
+        )
     }
 }

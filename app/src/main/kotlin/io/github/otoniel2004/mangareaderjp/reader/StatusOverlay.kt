@@ -19,7 +19,7 @@ import android.widget.TextView
  *
  *   gray  = waiting for the first page
  *   amber = screen moving / processing
- *   green = page ready (briefly shows "New page #N")
+ *   green = page read (briefly shows "Page N · X text blocks")
  *   red   = capture blocked by the app on screen
  *
  * It never takes touches (FLAG_NOT_TOUCHABLE), so it can't get in the way of the reader.
@@ -37,7 +37,8 @@ class StatusOverlay(
     sealed interface State {
         data object Waiting : State
         data object Working : State
-        data class NewPage(val number: Int) : State
+        data class NewPage(val number: Int, val textBlocks: Int) : State
+        data object Ready : State
         data object Blocked : State
     }
 
@@ -88,9 +89,10 @@ class StatusOverlay(
             State.Waiting -> { dotColor = GRAY; render(null) }
             State.Working -> { dotColor = AMBER; render(null) }
             State.Blocked -> { dotColor = RED; render("Capture blocked") }
+            State.Ready -> { dotColor = GREEN; render(null) }
             is State.NewPage -> {
                 dotColor = GREEN
-                render("New page #${state.number}")
+                render("Page ${state.number} · ${state.textBlocks} text blocks")
                 main.postDelayed(dropLabel, LABEL_MILLIS)
             }
         }

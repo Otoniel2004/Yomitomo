@@ -14,6 +14,9 @@ object ReaderStatus {
         val running: Boolean = false,
         val pagesDetected: Int = 0,
         val captureBlocked: Boolean = false,
+        /** Text of each block the OCR found on the last page, in reading order. */
+        val lastPageText: List<String> = emptyList(),
+        val lastOcrMillis: Long = 0,
     )
 
     private val mutableState = MutableStateFlow(State())

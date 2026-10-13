@@ -56,6 +56,7 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.mlkit.text.japanese)
 
     testImplementation(libs.junit)
 }

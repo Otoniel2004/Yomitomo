@@ -186,13 +186,13 @@ Each phase ends with something **testable on the phone**.
 - Unit tests: SM-2 scheduler, furigana splitting, romaji
 - ✅ Test: open the app, see the cards, toggle furigana, study a card
 
-### Phase 2: Background screen capture ✅ (code ready, testing on device)
+### Phase 2: Background screen capture ✅
 - Foreground Service + MediaProjection + notification with a "Stop" action
 - Page change detector (downscaled frames + pixel difference)
 - Debug overlay showing "page changed"
 - ✅ Test: enable, open the manga reader, turn pages and see the notice
 
-### Phase 3: OCR (ML Kit Japanese)
+### Phase 3: OCR (ML Kit Japanese) ✅ (code ready, testing on device)
 - OCR on frames, boxes drawn on the overlay (debug mode)
 - Noise filter
 - ✅ Test: see boxes over the bubbles

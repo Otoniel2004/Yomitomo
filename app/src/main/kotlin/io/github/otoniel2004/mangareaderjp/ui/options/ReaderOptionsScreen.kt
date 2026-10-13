@@ -49,6 +49,10 @@ class ReaderOptionsViewModel(private val settings: SettingsRepository) : ViewMod
     fun setKeepScreenOn(value: Boolean) {
         viewModelScope.launch { settings.setKeepScreenOn(value) }
     }
+
+    fun setShowOcrBoxes(value: Boolean) {
+        viewModelScope.launch { settings.setShowOcrBoxes(value) }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,6 +94,13 @@ fun ReaderOptionsScreen(onBack: () -> Unit) {
                     "the reader. This keeps the screen awake while the reader is on.",
                 checked = state.keepScreenOn,
                 onChange = viewModel::setKeepScreenOn,
+            )
+            HorizontalDivider()
+            OptionRow(
+                title = "Show OCR boxes (debug)",
+                description = "Draws a box around every piece of Japanese text the reader found.",
+                checked = state.showOcrBoxes,
+                onChange = viewModel::setShowOcrBoxes,
             )
             HorizontalDivider()
             Text(

@@ -8,9 +8,11 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.media.Image
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -22,6 +24,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -31,8 +34,13 @@ import io.github.otoniel2004.mangareaderjp.MainActivity
 import io.github.otoniel2004.mangareaderjp.MangaReaderApp
 import io.github.otoniel2004.mangareaderjp.R
 import io.github.otoniel2004.mangareaderjp.data.ReaderSettings
-import kotlinx.coroutines.runBlocking
+import io.github.otoniel2004.mangareaderjp.reader.ocr.JapaneseOcr
+import io.github.otoniel2004.mangareaderjp.reader.ocr.OcrBlock
+import io.github.otoniel2004.mangareaderjp.reader.ocr.OcrFilter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
 /**
@@ -40,15 +48,21 @@ import kotlin.math.roundToInt
  *
  *   start(resultCode, data)            ← consent from the system "share your screen" dialog
  *     └─ persistent notification       (Android requires it for screen capture)
- *     └─ MediaProjection → VirtualDisplay → ImageReader   (a downscaled live copy of the screen)
- *     └─ every POLL_MILLIS on a worker thread:
- *          latest frame → signature → PageChangeDetector → status dot + notification
+ *     └─ MediaProjection → VirtualDisplay → ImageReader   (a live copy of the screen)
+ *     └─ every POLL_MILLIS on the worker thread:
+ *          latest frame → signature → PageChangeDetector
+ *             MOVING    → clear our drawings (they'd be wrong on a moving page)
+ *             NEW_PAGE  → OCR on the OCR thread → filter → boxes + status
+ *             SAME_PAGE → restore the drawings of the current page
  *
- * Phase 2 only detects page changes. OCR and translation plug in here in the next phases.
+ * Threads: the worker thread owns all capture/page state; OCR runs on its own thread
+ * and hands results back to the worker. A "generation" number discards OCR results
+ * for a page that is no longer on screen.
  */
 class ScreenReaderService : Service() {
 
     companion object {
+        private const val TAG = "ScreenReader"
         private const val ACTION_START = "io.github.otoniel2004.mangareaderjp.reader.START"
         private const val ACTION_STOP = "io.github.otoniel2004.mangareaderjp.reader.STOP"
         private const val EXTRA_RESULT_CODE = "result_code"
@@ -57,8 +71,9 @@ class ScreenReaderService : Service() {
         private const val CHANNEL_ID = "reader"
         private const val NOTIFICATION_ID = 1
         private const val RESUME_NOTIFICATION_ID = 2
-        private const val CAPTURE_WIDTH = 360
+        private const val MAX_CAPTURE_WIDTH = 1080 // OCR needs real resolution
         private const val POLL_MILLIS = 250L
+        private const val MASK_MARGIN = 8
 
         fun start(context: Context, resultCode: Int, data: Intent) {
             val intent = Intent(context, ScreenReaderService::class.java)
@@ -76,18 +91,30 @@ class ScreenReaderService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private var workerThread: HandlerThread? = null
     private var worker: Handler? = null
+    private val ocrExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private var ocr: JapaneseOcr? = null
 
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
-    private var overlay: StatusOverlay? = null
+    private var statusOverlay: StatusOverlay? = null
+    private var boxesOverlay: OcrBoxesOverlay? = null
+    private var settings = ReaderSettings()
 
     @Volatile private var stopRequested = false // the user turned the reader off in our app
     @Volatile private var shuttingDown = false
 
+    // ── Worker-thread state ──────────────────────────────
     private val detector = PageChangeDetector()
+    private var heldImage: Image? = null          // newest frame, kept open so OCR can use it
     private var lastSignature: IntArray? = null
+    private var ignoredCells: BooleanArray? = null // where our drawings are, hidden from the detector
+    private var currentBlocks: List<OcrBlock>? = null // OCR result of the page on screen
+    private var generation = 0
     private var pages = 0
+    private var captureWidth = 0
+    private var captureHeight = 0
+    private var captureToScreen = 1f
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -125,6 +152,8 @@ class ScreenReaderService : Service() {
             return
         }
         projection = mediaProjection
+        settings = readerSettings()
+        ocr = JapaneseOcr()
 
         val thread = HandlerThread("screen-reader").apply { start() }
         val handler = Handler(thread.looper)
@@ -146,18 +175,23 @@ class ScreenReaderService : Service() {
         }, handler)
 
         val (width, height, dpi) = captureSize()
-        val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
+        captureWidth = width
+        captureHeight = height
+        // maxImages = 3: one held for OCR + room for acquireLatestImage to swap frames.
+        val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3)
         imageReader = reader
         virtualDisplay = mediaProjection.createVirtualDisplay(
             "manga-reader-capture", width, height, dpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.surface, null, handler,
         )
 
-        val settings = readerSettings()
-        if (Settings.canDrawOverlays(this) && (settings.showStatusDot || settings.keepScreenOn)) {
-            overlay = StatusOverlay(this, settings.showStatusDot, settings.keepScreenOn).also {
-                it.show()
-                it.setState(StatusOverlay.State.Waiting)
+        if (Settings.canDrawOverlays(this)) {
+            if (settings.showOcrBoxes) boxesOverlay = OcrBoxesOverlay(this).also { it.show() }
+            if (settings.showStatusDot || settings.keepScreenOn) {
+                statusOverlay = StatusOverlay(this, settings.showStatusDot, settings.keepScreenOn).also {
+                    it.show()
+                    it.setState(StatusOverlay.State.Waiting)
+                }
             }
         }
         getSystemService(NotificationManager::class.java).cancel(RESUME_NOTIFICATION_ID)
@@ -170,40 +204,106 @@ class ScreenReaderService : Service() {
         override fun run() {
             val reader = imageReader ?: return
             // acquireLatestImage drops older frames; null means the screen hasn't changed.
-            reader.acquireLatestImage()?.use { image -> lastSignature = FrameSampler.signature(image) }
-            lastSignature?.let { onEvent(detector.onFrame(it, SystemClock.uptimeMillis()), it) }
+            reader.acquireLatestImage()?.let { image ->
+                heldImage?.close()
+                heldImage = image
+                lastSignature = FrameSampler.signature(image)
+            }
+            lastSignature?.let { onEvent(detector.onFrame(it, SystemClock.uptimeMillis(), ignoredCells), it) }
             worker?.postDelayed(this, POLL_MILLIS)
         }
     }
 
     private fun onEvent(event: PageChangeDetector.Event, signature: IntArray) {
         when (event) {
-            PageChangeDetector.Event.MOVING -> overlay?.setState(StatusOverlay.State.Working)
+            PageChangeDetector.Event.MOVING -> {
+                generation++
+                clearDrawings()
+                statusOverlay?.setState(StatusOverlay.State.Working)
+            }
             PageChangeDetector.Event.NEW_PAGE -> {
+                generation++
+                currentBlocks = null
                 if (PageChangeDetector.looksBlack(signature)) {
                     ReaderStatus.update { it.copy(captureBlocked = true) }
-                    overlay?.setState(StatusOverlay.State.Blocked)
+                    statusOverlay?.setState(StatusOverlay.State.Blocked)
+                    notifyStatus()
                 } else {
                     pages++
-                    ReaderStatus.update { it.copy(pagesDetected = pages, captureBlocked = false) }
-                    overlay?.setState(StatusOverlay.State.NewPage(pages))
+                    runOcr()
                 }
-                getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification())
+            }
+            PageChangeDetector.Event.SAME_PAGE -> {
+                val blocks = currentBlocks
+                if (blocks == null) runOcr() else {
+                    showDrawings(blocks)
+                    statusOverlay?.setState(StatusOverlay.State.Ready)
+                }
             }
             PageChangeDetector.Event.NONE -> Unit
         }
     }
 
+    private fun runOcr() {
+        val image = heldImage ?: return
+        val engine = ocr ?: return
+        val bitmap = image.toBitmap()
+        val requested = generation
+        statusOverlay?.setState(StatusOverlay.State.Working)
+        ocrExecutor.execute {
+            val started = SystemClock.uptimeMillis()
+            val blocks = try {
+                OcrFilter.clean(engine.recognize(bitmap))
+            } catch (e: Exception) {
+                Log.w(TAG, "OCR failed", e)
+                emptyList()
+            } finally {
+                bitmap.recycle()
+            }
+            val elapsed = SystemClock.uptimeMillis() - started
+            worker?.post {
+                if (requested != generation) return@post // the page changed meanwhile
+                currentBlocks = blocks
+                showDrawings(blocks)
+                ReaderStatus.update {
+                    it.copy(
+                        pagesDetected = pages, captureBlocked = false,
+                        lastPageText = blocks.map(OcrBlock::text), lastOcrMillis = elapsed,
+                    )
+                }
+                statusOverlay?.setState(StatusOverlay.State.NewPage(pages, blocks.size))
+                notifyStatus()
+            }
+        }
+    }
+
+    /** Draw the OCR boxes. The mask is set first, so the detector never sees our own boxes appear. */
+    private fun showDrawings(blocks: List<OcrBlock>) {
+        val overlay = boxesOverlay ?: return
+        val boxes = blocks.map { it.box }
+        ignoredCells = FrameSampler.cellMask(boxes, captureWidth, captureHeight, MASK_MARGIN)
+        overlay.setBoxes(boxes.map { it.scaled(captureToScreen) })
+    }
+
+    private fun clearDrawings() {
+        boxesOverlay?.setBoxes(emptyList())
+        ignoredCells = null
+    }
+
     override fun onDestroy() {
         shuttingDown = true
-        overlay?.hide()
-        overlay = null
+        statusOverlay?.hide()
+        boxesOverlay?.hide()
+        statusOverlay = null
+        boxesOverlay = null
         val handler = worker
         val thread = workerThread
         if (handler != null && thread != null) {
             handler.removeCallbacks(poll)
             // Release capture objects on the worker thread so a running poll never sees them half-closed.
             handler.post {
+                heldImage?.close()
+                heldImage = null
                 virtualDisplay?.release()
                 imageReader?.close()
                 projection?.stop()
@@ -213,11 +313,13 @@ class ScreenReaderService : Service() {
             }
             thread.quitSafely()
         }
+        ocrExecutor.execute { ocr?.close() }
+        ocrExecutor.shutdown()
         ReaderStatus.update { ReaderStatus.State() }
         super.onDestroy()
     }
 
-    /** Downscaled capture size keeping the screen's aspect ratio (Phase 3 will raise it for OCR). */
+    /** Capture size: real screen size, capped at MAX_CAPTURE_WIDTH, same aspect ratio. */
     private fun captureSize(): Triple<Int, Int, Int> {
         val windowManager = getSystemService(WindowManager::class.java)
         val (realWidth, realHeight) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -228,13 +330,29 @@ class ScreenReaderService : Service() {
             windowManager.defaultDisplay.getRealMetrics(metrics)
             metrics.widthPixels to metrics.heightPixels
         }
-        val scale = (CAPTURE_WIDTH.toFloat() / realWidth).coerceAtMost(1f)
+        val scale = (MAX_CAPTURE_WIDTH.toFloat() / realWidth).coerceAtMost(1f)
+        captureToScreen = 1f / scale
         val dpi = (resources.displayMetrics.densityDpi * scale).roundToInt().coerceAtLeast(1)
         return Triple((realWidth * scale).roundToInt(), (realHeight * scale).roundToInt(), dpi)
     }
 
+    /** Copies a captured frame into a Bitmap. Rows may have padding at the end (rowStride > width × 4). */
+    private fun Image.toBitmap(): Bitmap {
+        val plane = planes[0]
+        val buffer = plane.buffer.apply { rewind() }
+        val rowPadding = plane.rowStride - plane.pixelStride * width
+        val padded = Bitmap.createBitmap(width + rowPadding / plane.pixelStride, height, Bitmap.Config.ARGB_8888)
+        padded.copyPixelsFromBuffer(buffer)
+        if (rowPadding == 0) return padded
+        return Bitmap.createBitmap(padded, 0, 0, width, height).also { padded.recycle() }
+    }
+
     private fun readerSettings(): ReaderSettings = runBlocking {
         (application as MangaReaderApp).container.settings.readerSettings.first()
+    }
+
+    private fun notifyStatus() {
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification())
     }
 
     private fun showResumeNotification() {
@@ -268,10 +386,11 @@ class ScreenReaderService : Service() {
             this, 1, Intent(this, ScreenReaderService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE,
         )
+        val state = ReaderStatus.state.value
         val text = when {
-            ReaderStatus.state.value.captureBlocked -> "The app on screen blocks capture"
+            state.captureBlocked -> "The app on screen blocks capture"
             pages == 0 -> "Waiting for a page…"
-            else -> "Pages detected: $pages"
+            else -> "Page $pages · ${state.lastPageText.size} text blocks"
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
