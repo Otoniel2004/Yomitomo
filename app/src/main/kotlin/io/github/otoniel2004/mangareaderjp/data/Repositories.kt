@@ -9,11 +9,18 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import io.github.otoniel2004.mangareaderjp.srs.Rating
 import io.github.otoniel2004.mangareaderjp.srs.Srs
+import io.github.otoniel2004.mangareaderjp.srs.ReviewEvent
+import io.github.otoniel2004.mangareaderjp.srs.StudyStats
+import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-class SavedItemRepository(private val dao: SavedItemDao, private val context: Context) {
+class SavedItemRepository(
+    private val dao: SavedItemDao,
+    private val context: Context,
+    private val reviewLog: ReviewLogDao,
+) {
     fun observeAll(): Flow<List<SavedItem>> = dao.observeAll()
 
     fun observe(id: Long): Flow<SavedItem?> = dao.observe(id)
@@ -29,6 +36,7 @@ class SavedItemRepository(private val dao: SavedItemDao, private val context: Co
     suspend fun review(item: SavedItem, rating: Rating, now: Long): SavedItem {
         val updated = item.copy(srs = Srs.schedule(item.srs, rating, now))
         dao.update(updated)
+        reviewLog.insert(ReviewLogEntry(itemId = item.id, rating = rating, reviewedAt = now, intervalDays = updated.srs.intervalDays))
         return updated
     }
 
@@ -38,6 +46,14 @@ class SavedItemRepository(private val dao: SavedItemDao, private val context: Co
         dao.delete(id)
         imagePath?.let { File(it).delete() }
     }
+
+    /** Everything the statistics screen needs. */
+    suspend fun stats(now: Long): StudyStats = StudyStats.compute(
+        cards = dao.getAll().map { it.srs },
+        reviews = reviewLog.getAll().map { ReviewEvent(it.rating, it.reviewedAt) },
+        now = now,
+        zone = ZoneId.systemDefault(),
+    )
 
     /** Folder for card images (crops from the camera or the reader). */
     fun imagesDir(): File = File(context.filesDir, "card-images").apply { mkdirs() }

@@ -48,6 +48,7 @@ fun HomeScreen(
     onOpenItem: (Long) -> Unit,
     onReview: () -> Unit,
     onOpenOptions: () -> Unit,
+    onOpenStats: () -> Unit,
     onAddTyped: () -> Unit,
     onScan: (fromCamera: Boolean) -> Unit,
 ) {
@@ -59,6 +60,9 @@ fun HomeScreen(
             TopAppBar(
                 title = { Text("Manga Reader JP") },
                 actions = {
+                    IconButton(onClick = onOpenStats) {
+                        Icon(painterResource(R.drawable.ic_chart), contentDescription = "Statistics")
+                    }
                     IconButton(onClick = onOpenOptions) {
                         Icon(painterResource(R.drawable.ic_tune), contentDescription = "Settings")
                     }

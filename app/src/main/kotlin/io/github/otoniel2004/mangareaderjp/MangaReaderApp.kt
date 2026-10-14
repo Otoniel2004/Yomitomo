@@ -43,7 +43,7 @@ class AppContainer(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val database = AppDatabase.build(context)
-    val items = SavedItemRepository(database.savedItemDao(), context)
+    val items = SavedItemRepository(database.savedItemDao(), context, database.reviewLogDao())
     val settings = SettingsRepository(context)
     val backup = BackupManager(database.savedItemDao()) { items.imagesDir() }
 

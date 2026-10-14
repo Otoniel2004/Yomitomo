@@ -18,6 +18,7 @@ import io.github.otoniel2004.mangareaderjp.ui.home.HomeScreen
 import io.github.otoniel2004.mangareaderjp.ui.options.ReaderOptionsScreen
 import io.github.otoniel2004.mangareaderjp.ui.review.ReviewScreen
 import io.github.otoniel2004.mangareaderjp.ui.scan.ScanScreen
+import io.github.otoniel2004.mangareaderjp.ui.stats.StatsScreen
 import io.github.otoniel2004.mangareaderjp.ui.theme.MangaReaderTheme
 
 class MainActivity : ComponentActivity() {
@@ -60,6 +61,7 @@ private fun AppNavHost() {
                 onOpenItem = { id -> nav.navigate("item/$id") },
                 onReview = { nav.navigate("review") },
                 onOpenOptions = { nav.navigate("options") },
+                onOpenStats = { nav.navigate("stats") },
                 onAddTyped = { nav.navigate("add") },
                 onScan = { fromCamera -> nav.navigate("scan/$fromCamera") },
             )
@@ -69,6 +71,7 @@ private fun AppNavHost() {
         }
         composable("review") { ReviewScreen(onBack = { nav.popBackStack() }) }
         composable("options") { ReaderOptionsScreen(onBack = { nav.popBackStack() }) }
+        composable("stats") { StatsScreen(onBack = { nav.popBackStack() }) }
         composable(
             "add?text={text}&image={image}&source={source}",
             arguments = listOf(

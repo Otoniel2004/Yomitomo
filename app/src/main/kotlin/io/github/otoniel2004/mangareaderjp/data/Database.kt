@@ -15,6 +15,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.Update
+import io.github.otoniel2004.mangareaderjp.srs.Rating
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
@@ -91,6 +92,25 @@ interface TranslationCacheDao {
     suspend fun put(entries: List<TranslationCacheEntry>)
 }
 
+/** One study review, kept for the statistics screen. */
+@Entity(tableName = "review_log")
+data class ReviewLogEntry(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val itemId: Long,
+    val rating: Rating,
+    val reviewedAt: Long,
+    val intervalDays: Int,
+)
+
+@Dao
+interface ReviewLogDao {
+    @Insert
+    suspend fun insert(entry: ReviewLogEntry)
+
+    @Query("SELECT * FROM review_log ORDER BY reviewedAt")
+    suspend fun getAll(): List<ReviewLogEntry>
+}
+
 /** Version 2 adds the translation cache; saved cards are untouched. */
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -102,16 +122,32 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-@Database(entities = [SavedItem::class, TranslationCacheEntry::class], version = 2, exportSchema = false)
+/** Version 3 adds the review log (statistics); existing data is untouched. */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `review_log` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `itemId` INTEGER NOT NULL, " +
+                "`rating` TEXT NOT NULL, `reviewedAt` INTEGER NOT NULL, `intervalDays` INTEGER NOT NULL)",
+        )
+    }
+}
+
+@Database(
+    entities = [SavedItem::class, TranslationCacheEntry::class, ReviewLogEntry::class],
+    version = 3,
+    exportSchema = false,
+)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun savedItemDao(): SavedItemDao
     abstract fun translationCacheDao(): TranslationCacheDao
+    abstract fun reviewLogDao(): ReviewLogDao
 
     companion object {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "manga-reader.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }
