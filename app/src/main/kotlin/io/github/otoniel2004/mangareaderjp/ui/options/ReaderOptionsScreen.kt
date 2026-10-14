@@ -40,6 +40,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.otoniel2004.mangareaderjp.AppContainer
 import io.github.otoniel2004.mangareaderjp.R
 import io.github.otoniel2004.mangareaderjp.data.FuriganaSize
+import io.github.otoniel2004.mangareaderjp.data.ReadingMode
 import io.github.otoniel2004.mangareaderjp.data.ReaderSettings
 import io.github.otoniel2004.mangareaderjp.reader.GestureForwarderService
 import android.content.Intent
@@ -125,6 +126,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setFuriganaSize(value: FuriganaSize) = launch { settings.setFuriganaSize(value) }
     fun setBatterySaver(value: Boolean) = launch { settings.setBatterySaver(value) }
     fun setHideKnownFurigana(value: Boolean) = launch { settings.setHideKnownFurigana(value) }
+    fun setReadingMode(value: ReadingMode) = launch { settings.setReadingMode(value) }
 
     /** Checks the key with DeepL first; only a key DeepL accepts is stored. */
     fun saveKey(key: String) {
@@ -236,6 +238,8 @@ fun ReaderOptionsScreen(onBack: () -> Unit) {
             HorizontalDivider()
 
             SectionTitle("Reader")
+            ReadingModeRow(state.readingMode, viewModel::setReadingMode)
+            HorizontalDivider()
             BatteryRow(unrestrictedBattery) {
                 context.startActivity(
                     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
@@ -344,6 +348,23 @@ private fun DeepLSection(state: DeepLUiState, viewModel: SettingsViewModel) {
             "The key is stored encrypted, only on this phone. It is sent only to DeepL.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Manga: two taps = the whole bubble. Book: two taps = the sentence under your finger. */
+@Composable
+private fun ReadingModeRow(selected: ReadingMode, onSelect: (ReadingMode) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Reading mode", style = MaterialTheme.typography.titleMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = selected == ReadingMode.MANGA, onClick = { onSelect(ReadingMode.MANGA) }, label = { Text("Manga") })
+            FilterChip(selected = selected == ReadingMode.BOOK, onClick = { onSelect(ReadingMode.BOOK) }, label = { Text("Book") })
+        }
+        Text(
+            if (selected == ReadingMode.MANGA) "Two taps translate the whole speech bubble."
+            else "Two taps translate only the sentence under your finger (novels have long paragraphs).",
+            style = MaterialTheme.typography.bodySmall,
         )
     }
 }

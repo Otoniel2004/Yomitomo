@@ -63,6 +63,12 @@ class SavedItemRepository(
     fun imagesDir(): File = File(context.filesDir, "card-images").apply { mkdirs() }
 }
 
+/**
+ * MANGA: a text block is a speech bubble, so "whole sentence" = the bubble.
+ * BOOK: a block can be a whole paragraph, so "whole sentence" = the sentence under your finger.
+ */
+enum class ReadingMode { MANGA, BOOK }
+
 /** Size of the furigana drawn on the page, relative to the characters. */
 enum class FuriganaSize(val ratio: Double) { SMALL(0.36), MEDIUM(0.45), LARGE(0.56) }
 
@@ -79,6 +85,7 @@ data class ReaderSettings(
     val batterySaver: Boolean = false,
     /** No furigana over words you already know (cards with an interval of 21+ days). */
     val hideKnownFurigana: Boolean = false,
+    val readingMode: ReadingMode = ReadingMode.MANGA,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -97,6 +104,7 @@ class SettingsRepository(private val context: Context) {
         val FURIGANA_SIZE = stringPreferencesKey("furigana_size")
         val BATTERY_SAVER = booleanPreferencesKey("battery_saver")
         val HIDE_KNOWN_FURIGANA = booleanPreferencesKey("hide_known_furigana")
+        val READING_MODE = stringPreferencesKey("reading_mode")
         val SEEDED = booleanPreferencesKey("seeded_samples")
     }
 
@@ -110,6 +118,7 @@ class SettingsRepository(private val context: Context) {
             furiganaSize = prefs[Keys.FURIGANA_SIZE]?.let { runCatching { FuriganaSize.valueOf(it) }.getOrNull() } ?: FuriganaSize.MEDIUM,
             batterySaver = prefs[Keys.BATTERY_SAVER] ?: false,
             hideKnownFurigana = prefs[Keys.HIDE_KNOWN_FURIGANA] ?: false,
+            readingMode = prefs[Keys.READING_MODE]?.let { runCatching { ReadingMode.valueOf(it) }.getOrNull() } ?: ReadingMode.MANGA,
         )
     }
 
@@ -120,6 +129,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAutoTranslate(value: Boolean) = set(Keys.AUTO_TRANSLATE, value)
     suspend fun setBatterySaver(value: Boolean) = set(Keys.BATTERY_SAVER, value)
     suspend fun setHideKnownFurigana(value: Boolean) = set(Keys.HIDE_KNOWN_FURIGANA, value)
+    suspend fun setReadingMode(value: ReadingMode) {
+        context.dataStore.edit { it[Keys.READING_MODE] = value.name }
+    }
+
     suspend fun setFuriganaSize(value: FuriganaSize) {
         context.dataStore.edit { it[Keys.FURIGANA_SIZE] = value.name }
     }

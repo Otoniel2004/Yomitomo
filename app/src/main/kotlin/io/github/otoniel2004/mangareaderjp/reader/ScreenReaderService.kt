@@ -37,6 +37,8 @@ import io.github.otoniel2004.mangareaderjp.data.ReaderSettings
 import io.github.otoniel2004.mangareaderjp.reader.ocr.JapaneseOcr
 import io.github.otoniel2004.mangareaderjp.reader.ocr.OcrDebug
 import io.github.otoniel2004.mangareaderjp.data.ItemType
+import io.github.otoniel2004.mangareaderjp.data.ReadingMode
+import io.github.otoniel2004.mangareaderjp.data.Segment
 import io.github.otoniel2004.mangareaderjp.data.SavedItem
 import io.github.otoniel2004.mangareaderjp.reader.ocr.Box
 import io.github.otoniel2004.mangareaderjp.reader.overlay.Drag
@@ -405,15 +407,7 @@ class ScreenReaderService : Service() {
         override fun onTap(block: Int, screenX: Int, screenY: Int) {
             val analyzed = currentPage?.blocks?.getOrNull(block) ?: return
             val word = analyzed.wordAt((screenX / captureToScreen).toInt(), (screenY / captureToScreen).toInt()) ?: return
-            showPopup { close ->
-                ReaderPopup(
-                    word, analyzed.segments, analyzed.block.text, translations, isLowerHalf(screenY),
-                    onSaveWord = { saveWord(analyzed, it) },
-                    onSaveSentence = { saveSentence(analyzed) },
-                    onNeedTranslation = { ensureTranslation(analyzed.block.text) },
-                    onClose = close,
-                )
-            }
+            showReaderPopup(analyzed, word, screenX, screenY)
         }
 
         /** A swipe that started on a bubble: replay it on the app below (if the service is on). */
@@ -430,15 +424,29 @@ class ScreenReaderService : Service() {
 
         override fun onDoubleTap(block: Int, screenX: Int, screenY: Int) {
             val analyzed = currentPage?.blocks?.getOrNull(block) ?: return
-            showPopup { close ->
-                ReaderPopup(
-                    null, analyzed.segments, analyzed.block.text, translations, isLowerHalf(screenY),
-                    onSaveWord = { saveWord(analyzed, it) },
-                    onSaveSentence = { saveSentence(analyzed) },
-                    onNeedTranslation = { ensureTranslation(analyzed.block.text) },
-                    onClose = close,
-                )
-            }
+            showReaderPopup(analyzed, word = null, screenX, screenY)
+        }
+    }
+
+    /**
+     * The popup for a tap: a word (1 tap) or straight to the sentence (2 taps). The "sentence" is
+     * the whole bubble in manga mode, or only the sentence under the finger in book mode.
+     */
+    private fun showReaderPopup(analyzed: AnalyzedBlock, word: PageWord?, screenX: Int, screenY: Int) {
+        val sentence = if (settings.readingMode == ReadingMode.BOOK) {
+            analyzed.sentenceAt((screenX / captureToScreen).toInt(), (screenY / captureToScreen).toInt())
+        } else {
+            null
+        } ?: analyzed.segments
+        val sentenceText = sentence.joinToString("") { it.surface }
+        showPopup { close ->
+            ReaderPopup(
+                word, sentence, sentenceText, translations, isLowerHalf(screenY),
+                onSaveWord = { saveWord(analyzed, it) },
+                onSaveSentence = { saveSentence(analyzed, sentence) },
+                onNeedTranslation = { ensureTranslation(sentenceText) },
+                onClose = close,
+            )
         }
     }
 
@@ -470,12 +478,14 @@ class ScreenReaderService : Service() {
         analyzed,
     )
 
-    private fun saveSentence(analyzed: AnalyzedBlock) = save(
+    private fun saveSentence(analyzed: AnalyzedBlock, sentence: List<Segment>) = save(
         SavedItem(
             type = ItemType.SENTENCE,
-            text = analyzed.block.text,
-            segments = analyzed.segments,
-            translation = translations.value[analyzed.block.text]?.best,
+            text = sentence.joinToString("") { it.surface },
+            segments = sentence,
+            // In book mode the sentence is part of a longer block: keep the block as context.
+            contextSegments = if (sentence.size < analyzed.segments.size) analyzed.segments else emptyList(),
+            translation = translations.value[sentence.joinToString("") { it.surface }]?.best,
             source = "Reader",
             createdAt = System.currentTimeMillis(),
             srs = Srs.newCard(System.currentTimeMillis()),

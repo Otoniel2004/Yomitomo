@@ -71,6 +71,20 @@ class PageAnalyzerTest {
     }
 
     @Test
+    fun `book mode picks the sentence under the finger`() {
+        // 猫が好き。犬も好き。 — 10 characters on one line, 40 px each, starting at x = 100.
+        val block = pages.analyze(listOf(horizontal("猫が好き。犬も好き。"))).single()
+        assertEquals("猫が好き。", block.sentenceAt(120, 520)!!.joinToString("") { it.surface })
+        assertEquals("犬も好き。", block.sentenceAt(340, 520)!!.joinToString("") { it.surface })
+    }
+
+    @Test
+    fun `sentence keeps its closing quote`() {
+        val block = pages.analyze(listOf(horizontal("「行く！」と言った。"))).single()
+        assertEquals("「行く！」", block.sentenceAt(140, 520)!!.joinToString("") { it.surface })
+    }
+
+    @Test
     fun `dictionary phrases stay one expression`() {
         val word = pages.analyze(listOf(horizontal("仕方がない"))).single().words.single()
         assertEquals("仕方がない", word.text)

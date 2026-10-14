@@ -48,14 +48,33 @@ class AnalyzedBlock(
     private val chars: List<PlacedChar>,
     /** For each character, the index of the word it belongs to (-1 for punctuation). */
     private val charWord: IntArray,
+    /** For each character, the index of its token in [segments]. */
+    private val charToken: IntArray = IntArray(0),
 ) {
     /** The word under a point (capture pixels): the character hit, or the nearest one in the block. */
     fun wordAt(x: Int, y: Int): PageWord? {
         if (chars.isEmpty()) return words.firstOrNull()
+        val char = nearestChar(x, y) { charWord[it] >= 0 }
+        return if (char < 0) null else words[charWord[char]]
+    }
+
+    /**
+     * Book mode: the sentence under a point, cut at 。！？ (plus closing quotes), instead of the
+     * whole block — a novel paragraph holds many sentences. Null when positions are unknown.
+     */
+    fun sentenceAt(x: Int, y: Int): List<Segment>? {
+        if (chars.isEmpty() || charToken.isEmpty()) return null
+        val char = nearestChar(x, y) { true }
+        if (char < 0) return null
+        val range = sentenceRange(segments, charToken[char])
+        return segments.subList(range.first, range.last + 1)
+    }
+
+    private fun nearestChar(x: Int, y: Int, eligible: (Int) -> Boolean): Int {
         var best = -1
         var bestDistance = Double.MAX_VALUE
         chars.forEachIndexed { i, c ->
-            if (charWord[i] < 0) return@forEachIndexed
+            if (!eligible(i)) return@forEachIndexed
             val distance = if (c.box.expandedBy(TAP_SLOP).contains(x, y)) 0.0
             else hypot((c.box.left + c.box.right) / 2.0 - x, (c.box.top + c.box.bottom) / 2.0 - y)
             if (distance < bestDistance) {
@@ -63,11 +82,24 @@ class AnalyzedBlock(
                 best = i
             }
         }
-        return if (best < 0) null else words[charWord[best]]
+        return best
     }
 
-    private companion object {
-        const val TAP_SLOP = 6
+    companion object {
+        private const val TAP_SLOP = 6
+        private const val SENTENCE_ENDS = "。！？!?"
+        private const val CLOSING = "」』）)"
+
+        /** Token range of the sentence containing token [index]. */
+        fun sentenceRange(segments: List<Segment>, index: Int): IntRange {
+            fun ends(i: Int) = segments[i].surface.any { it in SENTENCE_ENDS }
+            var start = index
+            while (start > 0 && !ends(start - 1)) start--
+            var end = index
+            while (end < segments.lastIndex && !ends(end)) end++
+            while (end < segments.lastIndex && segments[end + 1].surface.all { it in CLOSING }) end++
+            return start..end
+        }
     }
 }
 
@@ -107,6 +139,10 @@ class PageAnalyzer(private val analyzer: JapaneseAnalyzer, private val dictionar
         segments.forEachIndexed { i, s -> tokenStart[i] = offset; offset += s.surface.length }
 
         val charWord = IntArray(chars.size) { -1 }
+        val charToken = IntArray(chars.size)
+        segments.indices.forEach { t ->
+            for (unit in tokenStart[t] until tokenStart[t] + segments[t].surface.length) charToken[unitToChar[unit]] = t
+        }
         words.forEachIndexed { w, word ->
             for (t in word.start until word.end) {
                 for (unit in tokenStart[t] until tokenStart[t] + segments[t].surface.length) charWord[unitToChar[unit]] = w
@@ -125,7 +161,7 @@ class PageAnalyzer(private val analyzer: JapaneseAnalyzer, private val dictionar
                 }
             }
         }
-        return AnalyzedBlock(block, segments, words, rubies, chars, charWord)
+        return AnalyzedBlock(block, segments, words, rubies, chars, charWord, charToken)
     }
 
     /**
