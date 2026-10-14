@@ -34,3 +34,6 @@ Thumbs.db
 
 # ── Generated dictionary (built by :tools:dictbuilder) ──
 app/src/main/assets/dictionary/
+
+# ── Release builds copied for upload (never committed) ──
+dist/

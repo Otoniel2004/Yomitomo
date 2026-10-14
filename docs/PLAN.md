@@ -230,7 +230,7 @@ ML Kit OCR is good enough for now (decided 2026-10-14); revisit if stylized text
 - ML Kit kept as fallback
 - ✅ Test: compare accuracy before/after on the same pages
 
-### Phase 8: Extras
+### Phase 8: Extras ✅
 - Book mode (vertical columns)
 - JLPT level, study statistics
 - Replace SM-2 with FSRS (Anki's newer algorithm), if worth it
