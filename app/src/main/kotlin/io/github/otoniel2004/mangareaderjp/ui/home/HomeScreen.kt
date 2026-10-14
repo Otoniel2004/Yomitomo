@@ -18,6 +18,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -78,12 +79,30 @@ fun HomeScreen(
         ) {
             item { ReaderControl(state.reader) }
             item { ReviewBanner(dueCount = state.dueIds.size, onReview = onReview) }
-            item { FilterRow(state.filter, viewModel::setFilter) }
+            if (state.totalCount > 0) {
+                item {
+                    OutlinedTextField(
+                        value = state.filter.query,
+                        onValueChange = viewModel::setQuery,
+                        placeholder = { Text("Search: 漢字, kana, romaji or English") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            item { TypeFilterRow(state.filter.type, viewModel::setType) }
+            if (state.sources.size > 1) {
+                item { SourceFilterRow(state.sources, state.filter.source, viewModel::setSource) }
+            }
 
             if (!state.loading && state.items.isEmpty()) {
                 item {
                     Text(
-                        "Nothing saved yet. Once the reader is active, tap \"Save\" on a translation and it shows up here.",
+                        if (state.totalCount == 0) {
+                            "Nothing saved yet. Once the reader is active, tap \"Save\" on a translation and it shows up here."
+                        } else {
+                            "No cards match these filters."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(vertical = 24.dp),
                     )
@@ -108,11 +127,26 @@ private fun ReviewBanner(dueCount: Int, onReview: () -> Unit) {
 }
 
 @Composable
-private fun FilterRow(selected: ItemType?, onSelect: (ItemType?) -> Unit) {
+private fun TypeFilterRow(selected: ItemType?, onSelect: (ItemType?) -> Unit) {
     val options = listOf(null to "All") + ItemType.entries.map { it to it.label() }
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(options) { (type, label) ->
             FilterChip(selected = selected == type, onClick = { onSelect(type) }, label = { Text(label) })
+        }
+    }
+}
+
+/** Where cards came from: the reader, typed by hand, the camera… Only shown with 2+ sources. */
+@Composable
+private fun SourceFilterRow(sources: List<String>, selected: String?, onSelect: (String?) -> Unit) {
+    val options = listOf<String?>(null) + sources
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(options) { source ->
+            FilterChip(
+                selected = selected == source,
+                onClick = { onSelect(source) },
+                label = { Text(source ?: "Any source") },
+            )
         }
     }
 }

@@ -14,17 +14,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 
 data class HomeUiState(
     val loading: Boolean = true,
     val reader: ReaderStatus.State = ReaderStatus.State(),
-    val filter: ItemType? = null,
+    val filter: CardFilter = CardFilter(),
+    /** Card sources present in the collection ("Reader", "Manual"…), for the source chips. */
+    val sources: List<String> = emptyList(),
     val items: List<SavedItem> = emptyList(),
+    val totalCount: Int = 0,
     val dueIds: Set<Long> = emptySet(),
 )
 
 class HomeViewModel(private val items: SavedItemRepository) : ViewModel() {
-    private val filter = MutableStateFlow<ItemType?>(null)
+    private val filter = MutableStateFlow(CardFilter())
 
     /** A "clock" that ticks every minute, so cards become due without reopening the screen. */
     private val clock = flow {
@@ -41,12 +45,16 @@ class HomeViewModel(private val items: SavedItemRepository) : ViewModel() {
             loading = false,
             reader = reader,
             filter = currentFilter,
-            items = if (currentFilter == null) all else all.filter { it.type == currentFilter },
+            sources = all.mapNotNull { it.source }.distinct().sorted(),
+            items = all.filter(currentFilter::matches),
+            totalCount = all.size,
             dueIds = all.filter { Srs.isDue(it.srs, now) }.map { it.id }.toSet(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
-    fun setFilter(type: ItemType?) {
-        filter.value = type
-    }
+    fun setType(type: ItemType?) = filter.update { it.copy(type = type) }
+
+    fun setSource(source: String?) = filter.update { it.copy(source = source) }
+
+    fun setQuery(query: String) = filter.update { it.copy(query = query) }
 }
