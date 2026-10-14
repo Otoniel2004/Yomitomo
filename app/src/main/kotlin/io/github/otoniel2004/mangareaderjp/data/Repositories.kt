@@ -47,6 +47,10 @@ class SavedItemRepository(
         imagePath?.let { File(it).delete() }
     }
 
+    /** Words and expressions you know well (interval of 21+ days), as written on their cards. */
+    suspend fun knownWordTexts(): Set<String> =
+        dao.withIntervalAtLeast(StudyStats.KNOWN_INTERVAL_DAYS).filter { it.type != ItemType.SENTENCE }.map { it.text }.toSet()
+
     /** Everything the statistics screen needs. */
     suspend fun stats(now: Long): StudyStats = StudyStats.compute(
         cards = dao.getAll().map { it.srs },
@@ -73,6 +77,8 @@ data class ReaderSettings(
     val furiganaSize: FuriganaSize = FuriganaSize.MEDIUM,
     /** Checks the screen less often: slower to notice a new page, lighter on the battery. */
     val batterySaver: Boolean = false,
+    /** No furigana over words you already know (cards with an interval of 21+ days). */
+    val hideKnownFurigana: Boolean = false,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -90,6 +96,7 @@ class SettingsRepository(private val context: Context) {
         val AUTO_TRANSLATE = booleanPreferencesKey("auto_translate")
         val FURIGANA_SIZE = stringPreferencesKey("furigana_size")
         val BATTERY_SAVER = booleanPreferencesKey("battery_saver")
+        val HIDE_KNOWN_FURIGANA = booleanPreferencesKey("hide_known_furigana")
         val SEEDED = booleanPreferencesKey("seeded_samples")
     }
 
@@ -102,6 +109,7 @@ class SettingsRepository(private val context: Context) {
             autoTranslate = prefs[Keys.AUTO_TRANSLATE] ?: true,
             furiganaSize = prefs[Keys.FURIGANA_SIZE]?.let { runCatching { FuriganaSize.valueOf(it) }.getOrNull() } ?: FuriganaSize.MEDIUM,
             batterySaver = prefs[Keys.BATTERY_SAVER] ?: false,
+            hideKnownFurigana = prefs[Keys.HIDE_KNOWN_FURIGANA] ?: false,
         )
     }
 
@@ -111,6 +119,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setShowOcrBoxes(value: Boolean) = set(Keys.OCR_BOXES, value)
     suspend fun setAutoTranslate(value: Boolean) = set(Keys.AUTO_TRANSLATE, value)
     suspend fun setBatterySaver(value: Boolean) = set(Keys.BATTERY_SAVER, value)
+    suspend fun setHideKnownFurigana(value: Boolean) = set(Keys.HIDE_KNOWN_FURIGANA, value)
     suspend fun setFuriganaSize(value: FuriganaSize) {
         context.dataStore.edit { it[Keys.FURIGANA_SIZE] = value.name }
     }

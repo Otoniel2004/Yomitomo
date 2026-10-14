@@ -143,6 +143,8 @@ class ScreenReaderService : Service() {
     @OptIn(ExperimentalCoroutinesApi::class)
     private val offlineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
     @Volatile private var previousPageText: String? = null
+    /** Spellings of words you know well; their furigana is hidden when that option is on. */
+    @Volatile private var knownWords: Set<String> = emptySet()
 
     @Volatile private var stopRequested = false // the user turned the reader off in our app
     @Volatile private var shuttingDown = false
@@ -203,6 +205,7 @@ class ScreenReaderService : Service() {
         }
         projection = mediaProjection
         settings = readerSettings()
+        if (settings.hideKnownFurigana) saveScope.launch { knownWords = loadKnownWords() }
         ocr = JapaneseOcr()
 
         val thread = HandlerThread("screen-reader").apply { start() }
@@ -363,7 +366,10 @@ class ScreenReaderService : Service() {
      * so it never sees our own drawings appear and mistake them for a page change.
      */
     private fun showDrawings(page: PageState) {
-        val rubies = if (settings.showFuriganaOnPage) page.blocks.flatMap { it.rubies } else emptyList()
+        val rubies = if (!settings.showFuriganaOnPage) emptyList() else page.blocks.flatMap { block ->
+            // "Hide furigana for words you know": skip readings of words with mature cards.
+            block.rubies.filterNot { ruby -> ruby.word >= 0 && isKnown(block.words[ruby.word]) }
+        }
         val blockBoxes = page.blocks.map { it.block.box }
         ignoredCells = FrameSampler.cellMask(blockBoxes + rubies.map { it.box }, captureWidth, captureHeight, MASK_MARGIN)
         pageOverlay?.setContent(
@@ -371,6 +377,20 @@ class ScreenReaderService : Service() {
             if (settings.showOcrBoxes) blockBoxes.map { it.scaled(captureToScreen) } else emptyList(),
         )
         touchTargets?.setTargets(blockBoxes.map { it.expandedBy(TOUCH_MARGIN).scaled(captureToScreen) })
+    }
+
+    private suspend fun loadKnownWords(): Set<String> {
+        val texts = container.items.knownWordTexts()
+        // Also the dictionary form, so 食べた on the page matches a 食べる card.
+        val forms = texts.mapNotNull { container.dictionary.byText(it, 1).firstOrNull()?.preferredForm }
+        return texts + forms
+    }
+
+    private fun isKnown(word: PageWord): Boolean {
+        val known = knownWords
+        if (known.isEmpty()) return false
+        val entry = word.entry
+        return word.text in known || entry?.preferredForm in known || entry?.kanji?.any { it in known } == true
     }
 
     private fun clearDrawings() {

@@ -27,8 +27,12 @@ data class PageWord(val start: Int, val end: Int, val segments: List<Segment>, v
     val text: String get() = segments.joinToString("") { it.surface }
 }
 
-/** A piece of furigana to draw: [box] is where it goes on screen; vertical text stacks top to bottom. */
-data class RubyMark(val text: String, val box: Box, val vertical: Boolean)
+/**
+ * A piece of furigana to draw: [box] is where it goes on screen; vertical text stacks top to bottom.
+ * [word] is the index of the word it belongs to in [AnalyzedBlock.words] (-1 if none), so the
+ * reader can hide furigana for words you already know.
+ */
+data class RubyMark(val text: String, val box: Box, val vertical: Boolean, val word: Int = -1)
 
 /**
  * Everything precomputed for one text block, so a tap answers instantly:
@@ -109,6 +113,7 @@ class PageAnalyzer(private val analyzer: JapaneseAnalyzer, private val dictionar
             }
         }
 
+        val wordOfToken = IntArray(segments.size) { t -> words.indexOfFirst { t in it.start until it.end } }
         val rubies = if (block.printedFurigana) emptyList() else buildList {
             segments.forEachIndexed { t, segment ->
                 var unit = tokenStart[t]
@@ -116,7 +121,7 @@ class PageAnalyzer(private val analyzer: JapaneseAnalyzer, private val dictionar
                     val partChars = (unit until unit + part.text.length).map { unitToChar[it] }.distinct()
                     unit += part.text.length
                     val ruby = part.ruby ?: continue
-                    rubyMark(ruby, partChars.map { chars[it] }, rubyRatio)?.let(::add)
+                    rubyMark(ruby, partChars.map { chars[it] }, rubyRatio)?.copy(word = wordOfToken[t])?.let(::add)
                 }
             }
         }

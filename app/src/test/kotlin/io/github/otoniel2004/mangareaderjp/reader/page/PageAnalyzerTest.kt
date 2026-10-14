@@ -51,6 +51,12 @@ class PageAnalyzerTest {
     }
 
     @Test
+    fun `each furigana mark points to its word`() {
+        val block = pages.analyze(listOf(horizontal("俺は絶対に諦めない"))).single()
+        assertEquals(listOf("俺", "絶対", "諦めない"), block.rubies.map { block.words[it.word].text })
+    }
+
+    @Test
     fun `furigana sits right of vertical kanji`() {
         val rubies = pages.analyze(listOf(vertical("俺は絶対に諦めない"))).single().rubies
         assertTrue(rubies.all { it.vertical && it.box.left == 541 })

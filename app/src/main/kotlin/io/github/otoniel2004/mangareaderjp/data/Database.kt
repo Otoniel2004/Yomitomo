@@ -36,6 +36,9 @@ interface SavedItemDao {
     @Query("SELECT * FROM saved_items ORDER BY createdAt")
     suspend fun getAll(): List<SavedItem>
 
+    @Query("SELECT * FROM saved_items WHERE intervalDays >= :days")
+    suspend fun withIntervalAtLeast(days: Int): List<SavedItem>
+
     @Query("SELECT * FROM saved_items WHERE dueAt <= :now ORDER BY dueAt")
     suspend fun due(now: Long): List<SavedItem>
 

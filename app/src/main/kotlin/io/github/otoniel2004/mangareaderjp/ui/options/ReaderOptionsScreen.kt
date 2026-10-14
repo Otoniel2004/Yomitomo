@@ -124,6 +124,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setAutoTranslate(value: Boolean) = launch { settings.setAutoTranslate(value) }
     fun setFuriganaSize(value: FuriganaSize) = launch { settings.setFuriganaSize(value) }
     fun setBatterySaver(value: Boolean) = launch { settings.setBatterySaver(value) }
+    fun setHideKnownFurigana(value: Boolean) = launch { settings.setHideKnownFurigana(value) }
 
     /** Checks the key with DeepL first; only a key DeepL accepts is stored. */
     fun saveKey(key: String) {
@@ -250,6 +251,14 @@ fun ReaderOptionsScreen(onBack: () -> Unit) {
             )
             HorizontalDivider()
             FuriganaSizeRow(state.furiganaSize, viewModel::setFuriganaSize)
+            HorizontalDivider()
+            OptionRow(
+                title = "Hide furigana for words you know",
+                description = "No reading over words whose cards you remember well (reviewed up to 21+ days " +
+                    "apart). The furigana fades away as you learn.",
+                checked = state.hideKnownFurigana,
+                onChange = viewModel::setHideKnownFurigana,
+            )
             HorizontalDivider()
             SwipeRow(swipesEnabled) {
                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
