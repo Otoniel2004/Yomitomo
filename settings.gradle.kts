@@ -14,6 +14,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "manga-reader-jp"
+rootProject.name = "yomitomo"
 include(":app")
 include(":tools:dictbuilder")

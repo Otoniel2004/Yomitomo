@@ -1,4 +1,4 @@
-# Plan — Manga Reader JP
+# Plan — Yomitomo
 
 An Android app (Kotlin) that reads the screen while you read Japanese manga or
 books in **another app**. It shows furigana over kanji/katakana, translates a
@@ -240,7 +240,7 @@ ML Kit OCR is good enough for now (decided 2026-10-14); revisit if stylized text
 ## 7. Samsung S24 FE notes
 
 - **Battery**: One UI aggressively kills background services. Set
-  Settings → Apps → Manga Reader JP → Battery → **Unrestricted**.
+  Settings → Apps → Yomitomo → Battery → **Unrestricted**.
   The app will guide you there.
 - **Screen sharing (Android 14+)**: on enable, the system asks "Share one app"
   or "Share entire screen". Choose **entire screen**.

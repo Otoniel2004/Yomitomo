@@ -1,6 +1,6 @@
 # Security and privacy
 
-Manga Reader JP reads your screen, so it is built to keep what it sees on your phone.
+Yomitomo reads your screen, so it is built to keep what it sees on your phone.
 
 ## What stays on the phone
 
@@ -39,6 +39,6 @@ offline; it does not send your text anywhere.
 
 ## Reporting a vulnerability
 
-Please open a [GitHub security advisory](https://github.com/Otoniel2004/manga-reader-jp/security/advisories/new)
+Please open a [GitHub security advisory](https://github.com/Otoniel2004/yomitomo/security/advisories/new)
 (private) rather than a public issue. Include the Android version, the app version and steps to
 reproduce.

@@ -1,4 +1,4 @@
-# Manga Reader JP
+# Yomitomo
 
 An Android app for learning Japanese by reading manga. It reads the screen while you use **any**
 manga or book reader, puts furigana over kanji and katakana, translates a word with one tap and a
@@ -31,7 +31,7 @@ furigana and the on-device translator.
 
 ## Install
 
-Download the APK from the [Releases](https://github.com/Otoniel2004/manga-reader-jp/releases) page
+Download the APK from the [Releases](https://github.com/Otoniel2004/yomitomo/releases) page
 and open it on your phone (Android 8.0 or newer; allow installing from your browser or file
 manager when asked).
 
@@ -63,13 +63,13 @@ The first build downloads JMdict and the JLPT word lists and generates the bundl
 (`:tools:dictbuilder:buildDictionary`, ~30 s). It is not committed to the repository.
 
 **Release builds** are signed with a key kept outside the repository. Add to
-`~/.gradle/gradle.properties` (or set the matching `MANGA_READER_*` environment variables):
+`~/.gradle/gradle.properties` (or set the matching `YOMITOMO_*` environment variables):
 
 ```properties
-mangaReader.keystore=/path/to/release.jks
-mangaReader.keystorePassword=...
-mangaReader.keyAlias=...
-mangaReader.keyPassword=...
+yomitomo.keystore=/path/to/release.jks
+yomitomo.keystorePassword=...
+yomitomo.keyAlias=...
+yomitomo.keyPassword=...
 ```
 
 Without them, `assembleRelease` falls back to the debug key (fine for local testing only).

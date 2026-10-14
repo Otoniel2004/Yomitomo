@@ -10,4 +10,4 @@
     android:canRetrieveWindowContent="false"
     android:description="@string/gesture_forwarder_description"
     android:notificationTimeout="1000"
-    android:packageNames="io.github.otoniel2004.mangareaderjp" />
+    android:packageNames="io.github.otoniel2004.yomitomo" />

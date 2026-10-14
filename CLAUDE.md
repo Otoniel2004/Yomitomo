@@ -1,6 +1,6 @@
-# Manga Reader JP — project rules
+# Yomitomo — project rules
 
-- Android app in Kotlin + Jetpack Compose. Package `io.github.otoniel2004.mangareaderjp`.
+- Android app in Kotlin + Jetpack Compose. Package `io.github.otoniel2004.yomitomo`.
 - Plan and decisions: `docs/PLAN.md`. Follow the phase order; each phase ends testable on the phone (Samsung S24 FE), but the app must work on any Android 8.0+ (minSdk 26).
 - **Everything in the repository is in English**: UI text, code, comments, tests, docs, commit messages. Translations produced by the app go to English too.
 - Chat with the user in Portuguese, didactically: define technical terms and show step-by-step flows.

@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.otoniel2004.mangareaderjp"
+    namespace = "io.github.otoniel2004.yomitomo"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.github.otoniel2004.mangareaderjp"
+        applicationId = "io.github.otoniel2004.yomitomo"
         minSdk = 26
         targetSdk = 36
         versionCode = 2
@@ -22,10 +22,10 @@ android {
     // Without them, release builds fall back to the debug key (fine for local testing only).
     signingConfigs {
         create("release") {
-            releaseSigning("keystore", "MANGA_READER_KEYSTORE")?.let { storeFile = file(it) }
-            storePassword = releaseSigning("keystorePassword", "MANGA_READER_KEYSTORE_PASSWORD")
-            keyAlias = releaseSigning("keyAlias", "MANGA_READER_KEY_ALIAS")
-            keyPassword = releaseSigning("keyPassword", "MANGA_READER_KEY_PASSWORD")
+            releaseSigning("keystore", "YOMITOMO_KEYSTORE")?.let { storeFile = file(it) }
+            storePassword = releaseSigning("keystorePassword", "YOMITOMO_KEYSTORE_PASSWORD")
+            keyAlias = releaseSigning("keyAlias", "YOMITOMO_KEY_ALIAS")
+            keyPassword = releaseSigning("keyPassword", "YOMITOMO_KEY_PASSWORD")
         }
     }
 
@@ -33,7 +33,7 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            val hasReleaseKey = releaseSigning("keystore", "MANGA_READER_KEYSTORE") != null
+            val hasReleaseKey = releaseSigning("keystore", "YOMITOMO_KEYSTORE") != null
             signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
         }
     }
@@ -86,6 +86,6 @@ tasks.named("preBuild") {
     dependsOn(":tools:dictbuilder:buildDictionary")
 }
 
-/** A release-signing value from ~/.gradle/gradle.properties (mangaReader.<name>) or an environment variable. */
+/** A release-signing value from ~/.gradle/gradle.properties (yomitomo.<name>) or an environment variable. */
 fun releaseSigning(name: String, env: String): String? =
-    providers.gradleProperty("mangaReader.$name").orNull ?: providers.environmentVariable(env).orNull
+    providers.gradleProperty("yomitomo.$name").orNull ?: providers.environmentVariable(env).orNull
