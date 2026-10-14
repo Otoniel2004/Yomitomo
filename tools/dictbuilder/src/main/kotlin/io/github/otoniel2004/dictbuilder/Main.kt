@@ -7,7 +7,11 @@ import java.sql.DriverManager
 import java.time.LocalDate
 import java.util.zip.GZIPInputStream
 
-private const val JMDICT_URL = "http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz"
+// HTTPS, so the dictionary can't be tampered with on the way to the build machine.
+private const val JMDICT_URL = "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz"
+
+/** A real JMdict has ~200k entries; far fewer means a truncated or wrong download. */
+private const val MIN_ENTRIES = 150_000
 
 /** Separator for list values stored in one column (never appears in dictionary text). */
 const val SEPARATOR = "\u001F"
@@ -46,6 +50,10 @@ fun main(args: Array<String>) {
                 }
             }
         }
+    }
+    check(count >= MIN_ENTRIES) {
+        source.delete() // force a fresh download next time
+        "Only $count entries: the JMdict download looks incomplete. Run the build again."
     }
     output.delete()
     check(temp.renameTo(output)) { "Could not move ${temp.name} to ${output.name}" }

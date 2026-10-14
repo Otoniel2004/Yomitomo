@@ -103,7 +103,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun importCards(resolver: ContentResolver, uri: Uri) = launch {
         backupState.value = runCatching {
             val added = withContext(Dispatchers.IO) {
-                val text = resolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                val text = resolver.openInputStream(uri)?.use(::readLimited)
                     ?: error("could not open the file")
                 container.backup.import(text)
             }
@@ -458,4 +458,21 @@ private fun OptionRow(title: String, description: String, checked: Boolean, onCh
         Spacer(Modifier.width(12.dp))
         Switch(checked = checked, onCheckedChange = onChange)
     }
+}
+
+/** Backups are a few MB; refuse anything absurdly large instead of running out of memory. */
+private const val MAX_BACKUP_BYTES = 200L * 1024 * 1024
+
+private fun readLimited(input: java.io.InputStream): String {
+    val out = java.io.ByteArrayOutputStream()
+    val buffer = ByteArray(64 * 1024)
+    var total = 0L
+    while (true) {
+        val read = input.read(buffer)
+        if (read < 0) break
+        total += read
+        require(total <= MAX_BACKUP_BYTES) { "the file is too large to be a backup" }
+        out.write(buffer, 0, read)
+    }
+    return out.toString(Charsets.UTF_8.name())
 }

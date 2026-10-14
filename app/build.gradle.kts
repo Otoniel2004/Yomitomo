@@ -13,17 +13,28 @@ android {
         applicationId = "io.github.otoniel2004.mangareaderjp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "1.0.0"
+    }
+
+    // Release signing key: kept OUTSIDE the repository. Where it is and its passwords come from
+    // Gradle properties in ~/.gradle/gradle.properties or from environment variables.
+    // Without them, release builds fall back to the debug key (fine for local testing only).
+    signingConfigs {
+        create("release") {
+            releaseSigning("keystore", "MANGA_READER_KEYSTORE")?.let { storeFile = file(it) }
+            storePassword = releaseSigning("keystorePassword", "MANGA_READER_KEYSTORE_PASSWORD")
+            keyAlias = releaseSigning("keyAlias", "MANGA_READER_KEY_ALIAS")
+            keyPassword = releaseSigning("keyPassword", "MANGA_READER_KEY_PASSWORD")
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // For now, release is signed with the debug key (personal use).
-            // A real keystore must NEVER go into the repository (see .gitignore).
-            signingConfig = signingConfigs.getByName("debug")
+            val hasReleaseKey = releaseSigning("keystore", "MANGA_READER_KEYSTORE") != null
+            signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
         }
     }
 
@@ -74,3 +85,7 @@ dependencies {
 tasks.named("preBuild") {
     dependsOn(":tools:dictbuilder:buildDictionary")
 }
+
+/** A release-signing value from ~/.gradle/gradle.properties (mangaReader.<name>) or an environment variable. */
+fun releaseSigning(name: String, env: String): String? =
+    providers.gradleProperty("mangaReader.$name").orNull ?: providers.environmentVariable(env).orNull
