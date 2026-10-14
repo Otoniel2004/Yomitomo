@@ -55,9 +55,9 @@ class JmDictionary(context: Context) : Dictionary {
         if (ids.isEmpty()) return emptyList()
 
         val idList = ids.joinToString(",")
-        val header = mutableMapOf<Long, Pair<Int, Boolean>>()
-        db.rawQuery("SELECT id, priority, usually_kana FROM entry WHERE id IN ($idList)", null).use { c ->
-            while (c.moveToNext()) header[c.getLong(0)] = c.getInt(1) to (c.getInt(2) == 1)
+        val header = mutableMapOf<Long, Triple<Int, Boolean, Int>>()
+        db.rawQuery("SELECT id, priority, usually_kana, jlpt FROM entry WHERE id IN ($idList)", null).use { c ->
+            while (c.moveToNext()) header[c.getLong(0)] = Triple(c.getInt(1), c.getInt(2) == 1, c.getInt(3))
         }
         val kanji = texts(db, "SELECT entry_id, text FROM kanji WHERE entry_id IN ($idList) ORDER BY priority, rowid")
         val readings = texts(db, "SELECT entry_id, text FROM reading WHERE entry_id IN ($idList) ORDER BY priority, rowid")
@@ -69,8 +69,8 @@ class JmDictionary(context: Context) : Dictionary {
             }
         }
         return ids.mapNotNull { id ->
-            val (priority, usuallyKana) = header[id] ?: return@mapNotNull null
-            DictEntry(id, kanji[id].orEmpty(), readings[id].orEmpty(), senses[id].orEmpty(), priority, usuallyKana)
+            val (priority, usuallyKana, jlpt) = header[id] ?: return@mapNotNull null
+            DictEntry(id, kanji[id].orEmpty(), readings[id].orEmpty(), senses[id].orEmpty(), priority, usuallyKana, jlpt)
         }
     }
 

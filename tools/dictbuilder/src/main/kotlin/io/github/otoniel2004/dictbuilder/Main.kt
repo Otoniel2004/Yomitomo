@@ -12,6 +12,9 @@ private const val JMDICT_URL = "http://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz"
 /** Separator for list values stored in one column (never appears in dictionary text). */
 const val SEPARATOR = "\u001F"
 
+/** Bump when the database layout changes. */
+const val SCHEMA = "s2-jlpt"
+
 /**
  * Usage: dictbuilder <download-cache-dir> <asset-dir>
  *
@@ -30,11 +33,12 @@ fun main(args: Array<String>) {
         URI(JMDICT_URL).toURL().openStream().use { input -> source.outputStream().use { input.copyTo(it) } }
     }
 
+    val jlpt = JlptLevels.load(cacheDir)
     val output = File(assetDir, "jmdict.db")
     val temp = File(assetDir, "jmdict.db.tmp").apply { delete() }
     var count = 0
     DriverManager.getConnection("jdbc:sqlite:${temp.absolutePath}").use { db ->
-        DictionaryWriter(db).use { writer ->
+        DictionaryWriter(db, jlpt).use { writer ->
             GZIPInputStream(source.inputStream().buffered()).use { input ->
                 JmdictParser.parse(input) { entry ->
                     writer.write(entry)
@@ -45,24 +49,25 @@ fun main(args: Array<String>) {
     }
     output.delete()
     check(temp.renameTo(output)) { "Could not move ${temp.name} to ${output.name}" }
-    File(assetDir, "jmdict.version").writeText("${LocalDate.now()}-$count\n")
+    // The schema tag makes phones re-install the database when its layout changes.
+    File(assetDir, "jmdict.version").writeText("${LocalDate.now()}-$count-$SCHEMA\n")
     println("Wrote $count entries to $output (${output.length() / 1_000_000} MB)")
 }
 
 /**
  * Database layout (read-only in the app):
  *
- *   entry(id, priority, usually_kana)
+ *   entry(id, priority, usually_kana, jlpt)   jlpt: 5..1 (N5..N1), 0 = not in the JLPT lists
  *   kanji(entry_id, text, priority)
  *   reading(entry_id, text, norm, priority)   norm = reading in hiragana, used for lookups
  *   sense(entry_id, ord, pos, misc, gloss)    lists joined with SEPARATOR
  */
-class DictionaryWriter(private val db: Connection) : AutoCloseable {
+class DictionaryWriter(private val db: Connection, private val jlpt: JlptLevels? = null) : AutoCloseable {
     init {
         db.createStatement().use { s ->
             s.executeUpdate("PRAGMA journal_mode = OFF")
             s.executeUpdate("PRAGMA synchronous = OFF")
-            s.executeUpdate("CREATE TABLE entry(id INTEGER PRIMARY KEY, priority INTEGER NOT NULL, usually_kana INTEGER NOT NULL)")
+            s.executeUpdate("CREATE TABLE entry(id INTEGER PRIMARY KEY, priority INTEGER NOT NULL, usually_kana INTEGER NOT NULL, jlpt INTEGER NOT NULL)")
             s.executeUpdate("CREATE TABLE kanji(entry_id INTEGER NOT NULL, text TEXT NOT NULL, priority INTEGER NOT NULL)")
             s.executeUpdate("CREATE TABLE reading(entry_id INTEGER NOT NULL, text TEXT NOT NULL, norm TEXT NOT NULL, priority INTEGER NOT NULL)")
             s.executeUpdate("CREATE TABLE sense(entry_id INTEGER NOT NULL, ord INTEGER NOT NULL, pos TEXT NOT NULL, misc TEXT NOT NULL, gloss TEXT NOT NULL)")
@@ -70,7 +75,7 @@ class DictionaryWriter(private val db: Connection) : AutoCloseable {
         db.autoCommit = false
     }
 
-    private val entryInsert = db.prepareStatement("INSERT INTO entry VALUES (?, ?, ?)")
+    private val entryInsert = db.prepareStatement("INSERT INTO entry VALUES (?, ?, ?, ?)")
     private val kanjiInsert = db.prepareStatement("INSERT INTO kanji VALUES (?, ?, ?)")
     private val readingInsert = db.prepareStatement("INSERT INTO reading VALUES (?, ?, ?, ?)")
     private val senseInsert = db.prepareStatement("INSERT INTO sense VALUES (?, ?, ?, ?, ?)")
@@ -79,6 +84,7 @@ class DictionaryWriter(private val db: Connection) : AutoCloseable {
         entryInsert.setLong(1, entry.id)
         entryInsert.setInt(2, entry.priority)
         entryInsert.setInt(3, if (entry.usuallyKana) 1 else 0)
+        entryInsert.setInt(4, jlpt?.levelOf(entry) ?: 0)
         entryInsert.executeUpdate()
         for (k in entry.kanji) {
             kanjiInsert.setLong(1, entry.id)

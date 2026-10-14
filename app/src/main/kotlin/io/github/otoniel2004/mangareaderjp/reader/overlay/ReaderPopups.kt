@@ -131,7 +131,7 @@ private fun PopupFrame(atTop: Boolean, onClose: () -> Unit, content: @Composable
 private fun WordView(word: PageWord, saved: Boolean, onSave: () -> Unit, onShowSentence: () -> Unit, onClose: () -> Unit) {
     val pos = word.segments.firstOrNull()?.pos?.label().orEmpty()
     Text(
-        listOf(word.type.label(), pos).filter(String::isNotEmpty).joinToString(" · "),
+        listOf(word.type.label(), pos, word.entry?.jlptLabel.orEmpty()).filter(String::isNotEmpty).joinToString(" · "),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.primary,
     )

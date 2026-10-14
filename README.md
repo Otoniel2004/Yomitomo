@@ -52,6 +52,8 @@ The app bundles JMdict as a SQLite database. It is generated, not committed:
 
 - **JMdict** — Electronic Dictionary Research and Development Group, used under
   [CC BY-SA 4.0](https://www.edrdg.org/edrdg/licence.html). https://www.edrdg.org/jmdict/j_jmdict.html
+- **JLPT word lists** — [open-anki-jlpt-decks](https://github.com/jamsinclair/open-anki-jlpt-decks) (MIT),
+  based on Jonathan Waller's lists at [tanos.co.uk](http://www.tanos.co.uk/jlpt/) (CC BY).
 - **Kuromoji** (Apache 2.0) with the **IPADIC** dictionary — Japanese tokenizer.
 - **Google ML Kit** text recognition (Japanese) — on-device OCR.
 

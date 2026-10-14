@@ -11,6 +11,8 @@ data class Candidate(
     val meanings: List<String> = emptyList(),
     val isExpression: Boolean = false,
     val fromDictionary: Boolean = false,
+    /** JLPT level 5..1, or 0. */
+    val jlpt: Int = 0,
 )
 
 /** A piece of the input with its writing options; [selected] is the one in use. */
@@ -164,6 +166,7 @@ class KanaKanjiConverter(private val dictionary: Dictionary) {
         meanings = entry?.meanings().orEmpty(),
         isExpression = entry?.isExpression == true,
         fromDictionary = entry != null,
+        jlpt = entry?.jlpt ?: 0,
     )
 
     companion object {

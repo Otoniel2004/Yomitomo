@@ -56,11 +56,27 @@ import io.github.otoniel2004.mangareaderjp.ui.home.label
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import io.github.otoniel2004.mangareaderjp.dictionary.Dictionary
 import kotlinx.coroutines.launch
 
-class ItemDetailViewModel(private val id: Long, private val items: SavedItemRepository) : ViewModel() {
+class ItemDetailViewModel(
+    private val id: Long,
+    private val items: SavedItemRepository,
+    private val dictionary: Dictionary,
+) : ViewModel() {
     val item: StateFlow<SavedItem?> =
         items.observe(id).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** JLPT level of a word or expression card ("N3"), looked up in the dictionary. */
+    val jlpt: StateFlow<String?> = item
+        .map { card ->
+            if (card == null || card.type == ItemType.SENTENCE) null
+            else withContext(Dispatchers.IO) { dictionary.byText(card.text, 1).firstOrNull()?.jlptLabel }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun setShowFurigana(show: Boolean) {
         viewModelScope.launch { items.setShowFurigana(id, show) }
@@ -90,7 +106,8 @@ class ItemDetailViewModel(private val id: Long, private val items: SavedItemRepo
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ItemDetailScreen(id: Long, onBack: () -> Unit) {
-    val viewModel = appViewModel(key = "item-$id") { ItemDetailViewModel(id, it.items) }
+    val viewModel = appViewModel(key = "item-$id") { ItemDetailViewModel(id, it.items, it.dictionary) }
+    val jlpt by viewModel.jlpt.collectAsStateWithLifecycle()
     val item by viewModel.item.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
 
@@ -120,7 +137,7 @@ fun ItemDetailScreen(id: Long, onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            HeaderCard(current, viewModel::setShowFurigana)
+            HeaderCard(current, jlpt, viewModel::setShowFurigana)
 
             current.imagePath?.let { path -> Section("Image") { CardImage(path) } }
 
@@ -160,7 +177,7 @@ fun ItemDetailScreen(id: Long, onBack: () -> Unit) {
 }
 
 @Composable
-private fun HeaderCard(item: SavedItem, onToggleFurigana: (Boolean) -> Unit) {
+private fun HeaderCard(item: SavedItem, jlpt: String?, onToggleFurigana: (Boolean) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             FuriganaText(
@@ -175,6 +192,9 @@ private fun HeaderCard(item: SavedItem, onToggleFurigana: (Boolean) -> Unit) {
                 Switch(checked = item.showFurigana, onCheckedChange = onToggleFurigana)
             }
             HorizontalDivider()
+            jlpt?.let {
+                Text("JLPT $it", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
             if (item.translation != null) {
                 Text(item.translation, style = MaterialTheme.typography.titleMedium)
             }

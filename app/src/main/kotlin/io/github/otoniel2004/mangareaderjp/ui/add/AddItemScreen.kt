@@ -202,8 +202,9 @@ private fun ChunkChip(chunk: Chunk, onSelect: (Int) -> Unit) {
                     text = {
                         Column {
                             Text(candidate.surface, fontSize = 18.sp)
+                            val level = if (candidate.jlpt in 1..5) "N${candidate.jlpt} · " else ""
                             candidate.meanings.firstOrNull()?.let {
-                                Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                Text(level + it, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                             }
                         }
                     },

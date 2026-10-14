@@ -16,7 +16,11 @@ data class DictEntry(
     val senses: List<DictSense>,
     val priority: Int,
     val usuallyKana: Boolean,
+    /** JLPT level 5..1 (N5 = beginner … N1 = advanced), or 0 when the word is in no JLPT list. */
+    val jlpt: Int = 0,
 ) {
+    val jlptLabel: String? get() = if (jlpt in 1..5) "N$jlpt" else null
+
     val posTags: List<String> get() = senses.firstOrNull()?.pos.orEmpty()
 
     val isExpression: Boolean get() = "exp" in posTags
